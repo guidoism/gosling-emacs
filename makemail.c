@@ -25,9 +25,7 @@
 char *arpatime ();
 char *MessageId ();
 
-#ifdef BerkPasswd
 char *UsersRealName();
-#endif
 
 struct passwd *getpwuid();
 
@@ -64,43 +62,18 @@ char  **argv; {
 	if (dest[0] == 0)
 	    strcpy (dest, body), body = "";
 
-#ifdef BerkPasswd
     SendersName = UsersRealName(pw->pw_name, pw->pw_gecos);
-#else
-    SendersName = MailOriginator;
-    if(SendersName==0 || *SendersName==0)
-	SendersName = pw->pw_name;
-    for (p = SendersName; *p; p++)
-	if (*p == ' ')
-	    *p = '.';
-#endif
     printf ("Date: %s\nFrom: %s", arpatime(), SendersName);
 
-#ifdef AddUucpName
-    printf ("  <%s!%s>", me, pw->pw_name);
-#endif
 
-#ifdef AddArpaName
-    printf ("  <%s at %s>", pw->pw_name, me);
-#endif
 
-#ifdef AddNoName
     printf ("  <%s>", pw->pw_name);
-#endif
 
-#if 0
-    printf("\nSubject: %s\nTo: %s\nMessage-Id: <%s>\n",
-#else
     printf("\nSubject: %s\nTo: %s\n",
-#endif
 	subj, dest, MessageId ());
     while(fgets(dest, sizeof dest, stdin)) fputs(dest, stdout);
 
-#ifdef AddSiteName
     printf ("\n%s", body);
-#else
-    printf ("Origin: %s\n\n%s", me, body);
-#endif
 }
 
 char *arpatime() {
@@ -110,20 +83,13 @@ char *arpatime() {
 	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 	};
 	static char buf[100];
-#ifdef	__osf__
-	tzset();
-#endif	__osf__
 	sprintf(buf, "%d %s %d %d:%02d %s",
 		tm->tm_mday,
 		month[tm->tm_mon],
 		tm->tm_year,
 		tm->tm_hour,
 		tm->tm_min,
-#ifdef	__osf__
-		tzname[daylight]);
-#else
 		timezone (now.timezone, tm->tm_isdst));
-#endif	__osf__
 	return buf;
 }
 
@@ -141,7 +107,6 @@ char *MessageId () {
 	return buf;
 }
 
-#ifdef BerkPasswd
 char *
 UsersRealName(name, gecos)
 char *name, *gecos;
@@ -166,4 +131,3 @@ char *name, *gecos;
 	*p = '\0';
 	return(*b ? b : name);
 }
-#endif

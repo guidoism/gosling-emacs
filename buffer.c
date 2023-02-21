@@ -10,9 +10,6 @@
 #include "syntax.h"
 #include "abbrev.h"
 #include "keyboard.h"
-#ifdef	MPXcode
-#include <sys/mx.h>
-#endif
 #include <sgtty.h>
 #include "mchan.h"
 #include "mlisp.h"

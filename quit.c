@@ -39,25 +39,7 @@
  */
 
 #include <stdio.h>
-#ifdef pmax
-#include <varargs.h>
-#endif pmax
 
-#ifdef	pmax
-quit (status, fmt, va_alist)
-int status;
-char *fmt;
-va_dcl
-{
-	va_list ap;
-
-	va_start(ap);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-	exit (status);
-}
-
-#else
 
 quit (status, fmt, args)
 int status;
@@ -66,4 +48,3 @@ char *fmt;
 	_doprnt(fmt, &args, stderr);
 	exit (status);
 }
-#endif	pmax

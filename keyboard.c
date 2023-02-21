@@ -10,20 +10,12 @@
 #include <sgtty.h>
 #include <sys/types.h>
 
-#ifndef titan
 typedef long * waddr_t;
-#endif
 
-#ifdef	subprocesses
-#ifdef MPXcode
-#include <sys/mx.h>
-#endif
 #include "mchan.h"
-#endif
 
 #define MAXPUSHBACK 128
 
-#ifdef HalfBaked
 #include <signal.h>
 #include <setjmp.h>
 
@@ -38,7 +30,6 @@ static jmp_buf ReaderEnv;	/* a buffer for the only non-local goto in
 				   reading from the tty we want to fake the
 				   receipt of a ^G, so we have to break out
 				   of the read. */
-#endif
 
 
 /* A keyboard called procedure returns:
@@ -63,7 +54,6 @@ static Keystrokes;		/* The number of keystrokes since the last
 				   checkpoint. */
 static CanCheckpoint;		/* True iff we're allowed to checkpoint
 				   now. */
-#ifdef UmcpFeatures
 static char KeyBuf[10];		/* Buffer for keys from GetChar() */
 static NextK;			/* Next index into KeyBuf */
 static EchoKeys;		/* >= 0 iff we are to echo keystrokes */
@@ -72,9 +62,6 @@ static Echo1, Echo2;		/* Stuff for final echo */
 
 #define	min(a,b)	((a)<(b)?(a):(b))
 
-#ifdef	MPXcode
-static
-#endif
 EchoThem (notfinal)
 register notfinal;
 {
@@ -98,7 +85,6 @@ register notfinal;
 	DoDsp (0);
 }
 
-#endif UmcpFeatures
 
 /* ProcessKeys reads keystrokes and interprets them according to the
    given keymap and its inferior keymaps */
@@ -117,19 +103,15 @@ ProcessKeys () {
 		UndoBoundary ();
 	}
 	CanCheckpoint++;
-#ifdef UmcpFeatures
 	if (!InputPending && (EchoKeys == 0 || EchoArg == 0))
 	    EchoThem (-1);
-#endif
 	if ((c = GetChar ()) < 0) {
 	    CanCheckpoint = 0;
 	    return 0;
 	}
-#ifdef UmcpFeatures
 	if (NextK >= sizeof KeyBuf)
 	    NextK = 0;
 	KeyBuf[NextK++] = c;
-#endif
 	CanCheckpoint = 0;
 	if (NextGlobalKeymap == 0)
 	    NextGlobalKeymap = CurrentGlobalMap;
@@ -142,10 +124,6 @@ ProcessKeys () {
 	    NextLocalKeymap = 0;
 	    if (p = m -> k_binding[c]) {
 		LastKeyStruck = c & 0177;
-#ifndef	UmcpFeatures
-		if (p -> b_binding != KeyBound)
-		    ThisCommand = LastKeyStruck;
-#else
 		if (p -> b_binding != KeyBound) {
 		    /* If echoed immediate preceding key, echo this one */
 		    if (!InputPending && Echo2)
@@ -153,7 +131,6 @@ ProcessKeys () {
 		    NextK = 0;
 		    ThisCommand = LastKeyStruck;
 		}
-#endif
 		if (ExecuteBound (p) < 0)
 		    return 0;
 		if (ArgState != HaveArg)
@@ -172,17 +149,12 @@ ProcessKeys () {
 	    NextLocalKeymap = 0;
 	    if (p = m -> k_binding[c]) {
 		LastKeyStruck = c & 0177;
-#ifndef UmcpFeatures
-		if (p -> b_binding != KeyBound)
-		    ThisCommand = LastKeyStruck;
-#else
 		if (p -> b_binding != KeyBound) {
 		    if (!InputPending && Echo2)
 			EchoThem (0);
 		    NextK = 0;
 		    ThisCommand = LastKeyStruck;
 		}
-#endif
 		if (ExecuteBound (p) < 0)
 		    return 0;
 		if (ArgState != HaveArg)
@@ -202,15 +174,10 @@ ProcessKeys () {
 		NextLocalKeymap = local;
 	    }
 	}
-#ifndef UmcpFeatures
-	if (NextLocalKeymap == 0)
-	    IllegalOperation ();
-#else
 	if (NextLocalKeymap == 0) {
 	    NextK = 0;
 	    IllegalOperation ();
 	}
-#endif
 	else
 	    NextGlobalKeymap = &NullMap;
     }
@@ -219,12 +186,10 @@ ProcessKeys () {
 /* read a character from the keyboard; call the redisplay if needed */
 GetChar () {
     register c;
-#ifdef UmcpFeatures
     register alarmtime =
 	EchoKeys >= 0 ? (EchoArg >= 0 ? min (EchoKeys, EchoArg)
 				      : EchoKeys)
 		      : EchoArg;
-#endif
 
     if(pbhead >= 0){
         c = PushedBack[pbhead--];
@@ -256,90 +221,37 @@ GetChar () {
 	c = -1;
 	goto ReturnIt;
     }
-#ifdef subprocesses
     if (InputFD==stdin && mpxin->ch_count==0 && !InputPending) {
-#else
-
-#ifdef i386
-     if (InputFD==stdin && stdin->_r==0 && !InputPending) {
-#else  i386
-     if (InputFD==stdin && stdin->_cnt==0 && !InputPending) {
-#endif i386
-
-#endif
-#ifdef FIONREAD
 	ioctl (fileno(stdin), FIONREAD, (waddr_t)&InputPending);
-#endif
 	if(!InputPending) {
 	    DoDsp (0);
 	    if(CheckpointFrequency>0 && CanCheckpoint
 		    && Keystrokes>CheckpointFrequency) {
-#ifdef	MPXcode
-		long now[2];		/* to fix idle problem */
-		now[0] = now[1] = time(0);
-		utime(ttydev, now);	/* fix idle prob - set access time */
-#endif
 		CheckpointEverything ();
 		Keystrokes = 0;
 	    }
 	}
     }
     Keystrokes++;
-#ifdef HalfBaked
     if (setjmp (ReaderEnv) || ((Reading=1),InterruptChar)) {
 	c = Ctl ('G');
-#ifdef subprocesses
 	if (InputFD == stdin) mpxin->ch_count = 0;
-#else
-	if (InputFD == stdin) stdin->_cnt = 0;
-#endif
 	InputPending = 0;
 	InterruptChar = 0;
     } else
-#endif
-#ifdef subprocesses
     if(InputFD == stdin) {
-#ifndef UmcpFeatures
-	c = mpx_getc(mpxin);
-#else
 	if (alarmtime > 0)
 	    sigset (SIGALRM, EchoThem);
-#ifndef ECHOKEYS
-	c = mpx_getc(mpxin);
-#else
 	c = mpx_getc(mpxin, alarmtime);
-#endif
-#endif
 	InputPending = mpxin->ch_count;
     }
     else {
 	c = getc(InputFD);
-#ifdef i386
-	InputPending = stdin->_r>0;
-#else  i386
-	InputPending = stdin->_cnt>0;
-#endif i386
-    }
-#else
-    {
-#ifdef UmcpFeatures
-	if (alarmtime > 0) {
-	    sigset (SIGALRM, EchoThem);
-	    alarm ((unsigned) alarmtime);
-	}
-#endif
-	c = getc(InputFD);
-#ifdef UmcpFeatures
-	alarm (0);
-#endif
 	InputPending = stdin->_cnt>0;
     }
-#endif
     if (MiniBuf && (!InMiniBuf || *MiniBuf) && !ResetMiniBuf)
 	MiniBuf = *MiniBuf ? "" : 0;	/* Only reset minibuf w/ kbd input */
-#ifdef HalfBaked
     Reading = 0;
-#endif
     if(c<0)
     {
 	c = -1;
@@ -435,24 +347,18 @@ char *s; {
 }
 
 ExecuteKeyboardMacro () {
-#ifdef UmcpFeatures
     static Executing;		/* true iff already executing */
-#endif
 
     if (Remembering)
 	error ("Sorry, you can't call the keyboard macro while defining it.");
     else
 	if (MemUsed == 0)
 	    error ("No keyboard macro to execute.");
-#ifdef UmcpFeatures
 	else if (Executing)
 	    return 0;
-#endif
 	else {
 	    register i = arg;
-#ifdef UmcpFeatures
 	    Executing++;
-#endif
 	    arg = 0;
 	    ArgState = NoArg;
 	    do ExecStr (KeyMem);
@@ -492,27 +398,20 @@ RecursiveEdit () {
     return 0;
 }
 
-#ifdef UmcpFeatures
 /* Return MLisp value nonzero if (a) input pending or (b) we can't tell */
 static
 KeysPending () {
     ReleaseExpr (MLvalue);
     MLvalue -> exp_type = IsInteger;
-#ifdef FIONREAD
     if (!InputPending)
 	ioctl (fileno(stdin), FIONREAD, (waddr_t)&InputPending);
     MLvalue -> exp_int = InputPending;
-#else
-    MLvalue -> exp_int = -1;
-#endif
     return 0;
 }
-#endif
 
 /* This routine is called at interrupt level on receipt of an INT signal.  It
    cleanly terminates whatever is going on at the moment. */
 
-#ifdef HalfBaked
 
 static InterruptKey () {
     if (!Reading)
@@ -525,15 +424,12 @@ static InterruptKey () {
     }
 }
 
-#endif
 
 InitKey () {
     pbhead = -1;
     MetaChar = -1;
-#ifdef HalfBaked
 /*    sigset (SIGINT, InterruptKey); *//*XXXXXXXXX*/
     sigset (SIGINT, InterruptKey);/*XXXXXXXXX*/
-#endif
     if (!Once)
     {
 	setkey (CtlXmap, ('e'), ExecuteKeyboardMacro, "execute-keyboard-macro");
@@ -541,17 +437,13 @@ InitKey () {
 	setkey (CtlXmap, (')'), StopRemembering, "stop-remembering");
 	DefIntVar ("checkpoint-frequency", &CheckpointFrequency);
 	CheckpointFrequency = 300;
-#ifdef UmcpFeatures
 	DefIntVar ("echo-keystrokes", &EchoKeys);
 	EchoKeys = -1;
 	DefIntVar ("echo-argument", &EchoArg);
 	EchoArg = -1;
-#endif
 	defproc (PushBackCharacter, "push-back-character");
 	defproc (RecursiveEdit, "recursive-edit");
-#ifdef UmcpFeatures
 	defproc (KeysPending, "pending-input");
-#endif
 	DefIntVar ("this-command", &ThisCommand);
     }
 }

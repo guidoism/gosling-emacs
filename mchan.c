@@ -37,14 +37,8 @@
 #include "config.h"
 #include <signal.h>
 #include <errno.h>
-#ifdef	__osf__
-#define	_BSD 1
-#endif	__osf__
 #include <sys/param.h>
 #include <sys/wait.h>
-#ifdef	__osf__
-#undef	_BSD
-#endif	__osf__
 #include <sgtty.h>
 #include <time.h>
 #include <sys/time.h>
@@ -58,28 +52,16 @@
 
 char *malloc();
 
-#ifndef titan
 typedef long * waddr_t;
-#endif
 
-#ifdef subprocesses
 
 #define ChunkSize 500		/* amount to truncate when buffer overflows */
-#ifndef	TTYconnect
 static	PopUpUnexpected;	/* True iff unexpected opens pop up windows */
 static	EmacsShare;		/* Share flag, true iff opens allowed */
 static struct BoundName
 	*UnexpectedProc;	/* What to do with unexpected procs */
 static struct BoundName
 	*UnexpectedSent;	/* What to do when unexpected procs exit */
-#else
-int	PopUpUnexpected;	/* True iff unexpected opens pop up windows */
-int	EmacsShare;		/* Share flag, true iff opens allowed */
-struct BoundName
-	*UnexpectedProc;	/* What to do with unexpected procs */
-struct BoundName
-	*UnexpectedSent;	/* What to do when unexpected procs exit */
-#endif
 static	ProcessBufferSize;	/* Maximum size for process buffer */
 
 int     sel_ichans;		/* input channels */
@@ -90,10 +72,6 @@ static	struct tchars mytchars;
 static	struct ltchars myltchars;
 static	int mylmode;
 
-#ifdef ce
-FILE *err_file;			/* Debugging file */
-int	err_id;			/* User's ID for error messages */
-#endif
 
 struct channel_blk
 	stdin_chan;
@@ -121,11 +99,7 @@ char   *SIG_names[] = {		/* descriptive (?) names of signals */
     "Broken pipe",
     "Alarm clock",
     "Terminated",
-#ifdef	SIGURG
     "Urgent I/O condition",
-#else
-    "Signal 16",
-#endif
     "Stopped (signal)",
     "Stopped",
     "Continued",		/* */
@@ -147,21 +121,9 @@ char   *SIG_names[] = {		/* descriptive (?) names of signals */
 static char *KillNames[] = {	/* names used for signal-to-process */
     "",     "HUP",  "INT",  "QUIT", "ILL",  "TRAP", "IOT",  "EMT",
     "FPE",  "KILL", "BUS",  "SEGV", "SYS",  "PIPE", "ALRM", "TERM",
-#ifdef	SIGURG
     "URG",
-#else
-    "",     
-#endif
 	    "STOP", "TSTP", "CONT", "CHLD", "TTIN", "TTOU",
-#ifdef	SIGTINT
-"TINT",
-#else
-#ifdef	SIGIO
     "IO",
-#else
-    "",
-#endif
-#endif
     "XCPU", "XFSZ"
 };
 
@@ -222,9 +184,7 @@ register char  *command;
     register	pid;
     extern char *shell ();
     extern UseCshOptionF;
-#ifdef UciFeatures
     extern UseUsersShell;
-#endif
 
     ptyname = pty (&channel);
     if (ptyname == 0) {
@@ -233,23 +193,15 @@ register char  *command;
     }
     sel_ichans |= 1<<channel;
 
-#ifdef HalfBaked
     sighold (SIGINT);
-#endif
     if ((pid = vfork ()) < 0) {
 	error ("Fork failed");
 	close (channel);
 	sel_ichans &= ~(1<<channel);
-#ifdef DEBUG
-	sigrelse(SIGINT);
-#endif
 	return (-1);
     }
 
     if (pid == 0) {
-#ifdef ce
-	fprintf (err_file, "Creating pid %d on %s\n", getpid (), ptyname);
-#endif
 	close (channel);
 	sigrelse (SIGCHLD);
 	setpgrp (0, getpid ());
@@ -276,43 +228,23 @@ register char  *command;
 	ioctl (0, TIOCSLTC, (waddr_t)&myltchars);
 	ioctl (0, TIOCLSET, (waddr_t)&mylmode);
 	len = 0;			/* set page features to 0 */
-#ifdef	TIOCSWID
-	ioctl (0, TIOCSWID, (waddr_t)&len);	/* page width */
-#endif
-#ifdef	TIOCSLEN
-	ioctl (0, TIOCSLEN, (waddr_t)&len);	/* page len (CCA uses TIOCSSCR) */
-#endif
-#ifdef	UciFeatures
 	len = UseUsersShell;
 	UseUsersShell = 1;
-#endif
 	ld = strcmp(shell(), "/bin/csh") ? OTTYDISC : NTTYDISC;
 	ioctl (0, TIOCSETD, (waddr_t)&ld);
-#ifdef	UciFeatures
 	UseUsersShell = len;
-#endif
-#ifndef UciFeatures
-	execlp (shell (), shell (), UseCshOptionF ? "-cf" : "-c", command, 0);
-#else
 	execlp (shell (), shell (),
 		UseUsersShell && UseCshOptionF ? "-cf" : "-c", command, 0);
-#endif
 	write (1, "Couldn't exec the shell\n", 24);
 	_exit (1);
     }
 
-#ifdef HalfBaked
     sigrelse (SIGINT);
-#endif
     current_process -> p_name = command;
     current_process -> p_pid = pid;
     current_process -> p_gid = pid;
-#ifndef UtahFeatures
-    current_process -> p_flag = RUNNING;
-#else
     current_process -> p_flag = RUNNING | CHANGED;
     child_changed++;
-#endif
     current_process -> p_reason = 0;
     current_process -> p_chan.ch_index = channel;
     current_process -> p_chan.ch_ptr = NULL;
@@ -322,7 +254,6 @@ register char  *command;
     current_process -> p_chan.ch_outrec.ccount = 0;
     return 0;
 }
-#endif
 
 /* Process a signal from a child process and make the appropriate change in 
    the process block. Since signals are NOT queued, if two signals are
@@ -342,20 +273,15 @@ child_sig () {
 
 loop: 
     pid = wait3 (&w.w_status, WUNTRACED | WNOHANG, 0);
-#ifdef	ce
-    fprintf(err_file, "Wait3 pid %d w_status 0x%x\n", pid, w.w_status);
-#endif
     if (pid <= 0) {
 	if (errno == EINTR) {
 	    errno = 0;
 	    goto loop;
 	}
-#ifdef subprocesses
 	if (pid == -1) {
 	    if (!active_process (current_process))
 		current_process = get_next_process ();
 	}
-#endif
 	return;
     }
     if (pid == subproc_id) {	/* It may not be our progeny */
@@ -363,10 +289,6 @@ loop:
 				*/
 	goto loop;
     }
-#ifndef subprocesses
-    goto loop;
-}
-#else
     for (p = process_list; p != NULL; p = p -> next_process)
 	if (pid == p -> p_pid)
 	    break;
@@ -374,15 +296,9 @@ loop:
 	goto loop;		/* We don't know who this is */
 
     if (WIFSTOPPED (w)) {
-#ifndef UtahFeatures
-	p -> p_flag = STOPPED;
-#else
 	p -> p_flag = STOPPED | CHANGED;
-#endif
 	p -> p_reason = w.w_stopsig;
-#ifdef UtahFeatures
     child_changed++;
-#endif
     }
     else
 	if (WIFEXITED (w)) {
@@ -443,11 +359,7 @@ static int  mpx_count;		/* number of unprocessed characters in
 				   buffer */
 
 /* ARGSUSED */
-#ifdef ECHOKEYS
 fill_chan (chan, alrmtime)
-#else
-fill_chan (chan)
-#endif
 register struct channel_blk *chan;
 {
     int ichans, ochans, cc;
@@ -455,10 +367,8 @@ register struct channel_blk *chan;
     register struct process_blk *p;
     struct timeval	timeout;
 
-#ifdef	ECHOKEYS
     if (alrmtime <= 0 || alrmtime > 100000000)
 	alrmtime = 100000;
-#endif
 
 readloop:
     if (err != 0)			/* check for ^G interrupts */
@@ -482,22 +392,13 @@ readloop:
 	}
     }
 
-#ifdef	ECHOKEYS
     timeout.tv_sec = alrmtime; timeout.tv_usec = 0;
     if ((cc = select(32, &ichans, &ochans, 0, &timeout)) < 0)
 	goto readloop;			/* try again */
     else
 	if (cc == 0)
 	    EchoThem (1);
-#else
-    timeout.tv_sec = 100000; timeout.tv_usec = 0;
-    if (select(32, &ichans, &ochans, 0, &timeout) < 0)
-	goto readloop;			/* try again */
-#endif
 
-#ifdef	TTYconnect
-    AttachSocket (ichans);		/* check for a new socket */
-#endif
 
     if (ichans&1) {
         ichans &= ~1;
@@ -509,21 +410,13 @@ readloop:
 	    }
 	    mpxin->ch_ptr = cbuffer;
 	    mpxin->ch_count = cc - 1;
-#ifdef i386
-	    stdin->_flags &= ~__SEOF;
-#else  i386
 	    stdin->_flag &= ~_IOEOF;
-#endif i386
 	    return (*mpxin->ch_ptr++ & 0377);
 	}
 	else if (cc == 0)
 	{
 	    fprintf(stderr,"null read from stdin\r\n");
-#ifdef i386
-	    stdin->_flags |= __SEOF;	/* mark EOF encountered */
-#else  i386
 	    stdin->_flag |= _IOEOF;	/* mark EOF encountered */
-#endif i386
 	    return(EOF);
 	}
     }
@@ -551,27 +444,9 @@ readloop:
     (This corresponds to the action performed when a M_CLOSE is received
     with the MPXio version of Emacs.)
  */
-#ifdef	ce
-		extern int errno;
-		fprintf (err_file, "%s read from %s on channel %d errno=%d\n",
-			cc == 0 ? "null" : "error", p -> p_name,
-			this_chan -> ch_index, cc < 0 ? errno : 0);
-#endif
 		sel_ichans &= ~(1 << this_chan -> ch_index); /* disconnect */
 		sel_ochans &= ~(1 << this_chan -> ch_index); /* disconnect */
 		close (this_chan->ch_index);
-#ifdef	TTYconnect
-		if (cc < 0) {	/* peer dropped it */
-#ifndef	UtahFeatures
-		    p -> p_flag = EXITED;
-		    p -> p_reason = 0;
-#else
-		    p -> p_flag = EXITED | CHANGED;
-		    p -> p_reason = 0;
-		    child_changed++;
-#endif
-		}
-#endif
 	    }
 	}
 	if (ochans & (1<<this_chan->ch_index)) {
@@ -597,19 +472,15 @@ readloop:
     /* SWT - do this after stuffing output.  Hopefully the "Exited"
      * message will always come at the end of the buffer then.
      */
-#ifdef	UtahFeatures
     if (child_changed) {
 	change_msgs ();
 	child_changed = 0;
     }
-#endif
 
     if (chan != NULL)
 	goto readloop;
 
-#ifdef UtahFeatures
     return 0;
-#endif
 }
 
 
@@ -624,9 +495,7 @@ change_msgs () {
     int sent = 0;			/* if non-zero, call sentinel */
     char    line[50];
 
-#ifdef HalfBaked
     sighold (SIGINT);
-#endif
     for (p = process_list; p != NULL; p = p -> next_process)
 	if (p -> p_flag & CHANGED) {
 	    sent = 0;
@@ -700,9 +569,7 @@ change_msgs () {
 		    ArgState = lstate;
 		}
 	}
-#ifdef HalfBaked
     sigrelse (SIGINT);
-#endif
     DoDsp (1);
     SetBfp (old);
 }
@@ -750,9 +617,7 @@ register struct channel_blk *chan;
 {
     struct buffer  *old_buffer = bf_cur;
 
-#ifdef HalfBaked
     sighold (SIGINT);
-#endif
 
     if (chan -> ch_proc == NULL) {
 	SetBfp (chan -> ch_buffer);
@@ -802,9 +667,7 @@ register struct channel_blk *chan;
     }
     chan -> ch_count = 0;
 
-#ifdef HalfBaked
     sigrelse (SIGINT);
-#endif
     return 0;			/* ACT 8-Sep-1982 */
 }
 
@@ -1199,13 +1062,8 @@ ProcessOutput () {
     MLvalue -> exp_release = 1;
     MLvalue -> exp_int = MPX_chan -> ch_count;
     MLvalue -> exp_v.v_string = (char *) malloc (MLvalue -> exp_int + 1);
-#ifndef UtahFeatures
-    strcpyn (MLvalue -> exp_v.v_string, MPX_chan -> ch_ptr,
-	MLvalue -> exp_int);
-#else
     cpyn (MLvalue -> exp_v.v_string, MPX_chan -> ch_ptr,
 	MLvalue -> exp_int);
-#endif
     MLvalue -> exp_v.v_string[MLvalue -> exp_int] = '\0';
     return 0;
 }
@@ -1221,22 +1079,14 @@ sig_process (signal, leader) register leader; {
 	return 0;
     }
 
-#ifdef ce
-    fprintf (err_file, "Sending signal %d to proc (%d, %d), leader=%d\n",
-	signal, process -> p_pid, process -> p_gid, leader);
-#endif
 
 /* We must update the process flag explicitly in the case of continuing a 
    process since no signal will come back */
 
     if (signal == SIGCONT) {
 	sighold (SIGCHLD);
-#ifndef UtahFeatures
-	process -> p_flag = (process -> p_flag & ~STOPPED) | RUNNING;
-#else
 	process -> p_flag = (process -> p_flag & ~STOPPED) | RUNNING | CHANGED;
 	child_changed++;
-#endif
 	sigrelse (SIGCHLD);
     }
 
@@ -1250,28 +1100,7 @@ sig_process (signal, leader) register leader; {
     }
 
     leader = leader ? process -> p_pid : process -> p_gid;
-#ifndef	TTYconnect
-#ifdef i386
-    if (leader)
-#else i386
     if (leader != -1)
-#endif i386
-#else TTYconnect
-	killpg (leader, signal);
-    if (leader != -1)
-	killpg (leader, signal);
-    else
-	if (process -> p_pid == -1 && signal == SIGKILL) {
-	    sel_ichans &= ~(1 << process -> p_chan.ch_index);
-	    sel_ochans &= ~(1 << process -> p_chan.ch_index);	    
-	    close (process -> p_chan.ch_index);
-	    sighold (SIGCHLD);
-	    process -> p_flag = SIGNALED | CHANGED;
-	    process -> p_reason = SIGKILL;
-	    child_changed++;
-	    sigrelse (SIGCHLD);
-	}
-#endif TTYconnect
     return 0;
 }
 
@@ -1443,40 +1272,22 @@ PID (leader) {
     return 0;
 }
 
-#ifdef UtahFeatures
 /* Get input from a subprocess (or the tty) and process it.
  * Tty input is just buffered until requested.
  */
 static AwaitProcessInput ()		/* just poll for input */
 {
-#ifdef ECHOKEYS
     fill_chan(NULL, 0);
-#else
-    fill_chan(NULL);
-#endif
 }
-#endif
-#endif
 
 
 /* Initialize things on the multiplexed file.  This involves connecting the
    standard input to a channel on the mpx file. */
 
 InitMpx () {
-#ifdef subprocesses
     extern  child_sig ();
     extern char *MyTtyName;
 
-#ifdef ce
-    err_file = fopen ("/tmp/emacs.mxdebug", "a");
-    if (err_file == NULL) {
-	unlink ("/tmp/emacs.mxdebug");
-	err_file = fopen ("/tmp/emacs.mxdebug", "a");
-    }
-    chmod ("/tmp/emacs.mxdebug", 0666);
-    setbuf (err_file, NULL);
-    err_id = getuid ();
-#endif
     mpxin -> ch_index = 0;
     sel_ichans = 1;
     ioctl (0, TIOCGETP, (waddr_t)&mysgttyb);
@@ -1486,12 +1297,7 @@ InitMpx () {
     ioctl (0, TIOCLGET, (waddr_t)&mylmode);
     mpxin -> ch_ptr = NULL;
     mpxin -> ch_count = 0;
-#endif
     sigset (SIGCHLD, child_sig);
-#ifdef subprocesses
-#ifdef	TTYconnect
-    InitTtyAccept ();
-#endif
 
     if (!Once)
     {
@@ -1540,34 +1346,16 @@ InitMpx () {
     defproc (ResetSentinel, "reset-sentinel");
     defproc (ProcessSentinelName, "process-sentinel-name");
     defproc (SetUnexpectedSent, "unexpected-process-sentinel");
-#ifdef	UtahFeatures
     defproc (AwaitProcessInput, "await-process-input");
-#endif
-#endif
     }
 }
 
 QuitMpx () {
-#ifdef subprocesses
-#ifdef	TTYconnect
-    QuitTtyAccept ();
-#endif
-#endif
 }
 
 
 SuspendMpx () {
-#ifdef subprocesses
-#ifdef	TTYconnect
-    SuspendTtyAccept ();
-#endif
-#endif
 }
 
 ResumeMpx () {
-#ifdef subprocesses
-#ifdef	TTYconnect
-    ResumeTtyAccept ();
-#endif
-#endif
 }

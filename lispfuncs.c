@@ -299,11 +299,7 @@ char   *something; {
 
 		fmt[0] = "%s";
 		fmt[1] = prompt;
-#ifdef	pmax
-		answer = BrGetstr(*something=='n', init, fmt[0], fmt[1], 0, 0);
-#else
 		answer = BrGetstr (*something=='n', init, fmt);
-#endif	pmax
 		break;
 	    }
 	}

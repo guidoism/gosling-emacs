@@ -221,14 +221,6 @@ cleanup () {
     CurHL = -1;
     SetHL (0);
     topos (tt.t_length, 1);
-#if 0
-    printf ("\033[J\033[%dm", InverseVideo ? 7 : 0);
-    pad (10, 1.00);
-    printf ("\033[>30;33;34;37h"); /* SM(ZDBM,ZWFM;ZWBM;ZAXM) */
-    pad (20, 1.00);
-    printf ("\033[>52l");	  /* RM Metakey */
-    pad (10, 1.00);
-#endif
 }
 
 static

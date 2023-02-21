@@ -32,12 +32,8 @@
 #include <dirent.h>
 #include <sys/param.h>
 
-#ifdef titan
-#define CHDIR(dirname) chdir(dirname)
-#else
 /* Hack! */
 #define CHDIR(dirname) syscall(12,dirname)
-#endif titan
 
 char *sprintfl(), *getenv();
 

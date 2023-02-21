@@ -215,10 +215,6 @@ static LineToTopOfWindow () {
 
 static  PageNextWindow () {
     struct window  *w = wn_cur -> w_next;
-#ifdef notdef				/* SWT, use negative args */
-    register down = ArgState==HaveArg;
-    arg = 1;
-#endif
     if (w == 0 || w -> w_next == 0 && ResetMiniBuf == 0)
 	w = windows;
     if (w == wn_cur)

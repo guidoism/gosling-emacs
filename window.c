@@ -11,9 +11,6 @@
 #include <stdio.h>
 #include <ctype.h>
 #include "mlisp.h"
-#ifdef pmax
-#include <varargs.h>
-#endif pmax
 
 char *malloc();
 
@@ -634,53 +631,14 @@ register    Line; {
     return misseddot;
 }
 
-#ifdef	pmax
-/* leave emacs after spitting some expletive on the tty,
-   also fix up other stuff */
-quit (code, fmt, va_alist)
-int code;
-char *fmt;
-va_dcl
-{
-    va_list ap;
-
-#ifdef subprocesses
-    kill_processes ();
-#endif
-    RstDsp ();
-#ifdef OneEmacsPerTty
-    UnlockTty ();
-#endif
-#ifdef UciFeatures
-    QuitMpx();
-#endif
-
-    va_start(ap);
-    vfprintf(stderr, fmt, ap);
-    va_end(ap);
-
-    exit (code);
-}
-
-#else
 
 /* leave emacs after spitting some expletive on the tty,
    also fix up other stuff */
 quit (code, fmt, args) {
-#ifdef subprocesses
-    kill_processes ();
-#endif
     RstDsp ();
-#ifdef OneEmacsPerTty
-    UnlockTty ();
-#endif
-#ifdef UciFeatures
-    QuitMpx();
-#endif
     _doprnt (fmt, &args, stderr);
     exit (code);
 }
-#endif	pmax
 
 /* Scan the current buffer for the k'th occurrence of character c,
    starting at position n; k may be negative.  Returns the position

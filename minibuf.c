@@ -42,9 +42,6 @@
 #include "window.h"
 #include "keyboard.h"
 #include "mlisp.h"
-#ifdef pmax
-#include <varargs.h>
-#endif pmax
 #include <ctype.h>
 
 #define BufferSize 2000
@@ -55,7 +52,6 @@ static StackTraceOnError;	/* if true, whenever an error is encountered
 				   trace buffer */
 
 
-#ifndef	pmax
 /* sprintrmt(arg) effectively does an sprintf(buf,arg[0],arg[1],...); */
 sprintrmt(buf, arg)
 char *buf;
@@ -68,13 +64,10 @@ register char **arg; {
 	_doprnt(*arg, arg+1 , &_strbuf);
 	putc('\0', &_strbuf);
 }
-#endif	pmax
 
-#ifndef __osf__
 /* This is the same as the standard sprintf (buf, ...) except that it
    guarantees to return buf */
 /* VARARGS */
-#ifndef pmax
 char *sprintf (buf, fmt, args)
 char *buf, *fmt; {
 	FILE _strbuf;
@@ -86,47 +79,10 @@ char *buf, *fmt; {
 	putc('\0', &_strbuf);
 	return buf;
 }
-#else pmax
-#ifdef i386
-int sprintf(buf, fmt, va_alist)
-#else  i386
-char *sprintf(buf, fmt, va_alist)
-#endif i386
-char *buf, *fmt;
-va_dcl
-{
-	FILE _strbuf;
-	va_list ap;
-
-	va_start(ap);
-#ifdef i386
-	_strbuf._flags = __SWR | __SSTR;
-        _strbuf._bf._base = _strbuf._p = (unsigned char *)buf;
-        _strbuf._bf._size = _strbuf._w = 10000;
-
-	(void) vfprintf(&_strbuf, fmt, ap);
-	va_end(ap);
-	putc('\0', &_strbuf);
-	return (int) buf;
-#else  i386
-	_strbuf._flag = _IOSTRG;
-	_strbuf._ptr = buf;
-	_strbuf._cnt = 10000;
-	(void)_doprnt(fmt, ap, &_strbuf);
-	va_end(ap);
-	putc('\0', &_strbuf);
-	return buf;
-#endif i386
-}
-#endif pmax
-#else   __osf__
-/* In OSF, sprintf() returns int */
-#endif	__osf__
 
 /* This is the same as sprintf (buf, ...) except that it guards against
    buffer overflow */
 /* VARARGS */
-#ifndef pmax
 char *sprintfl (buf, len, fmt, args)
 char *buf, *fmt; {
 	FILE _strbuf;
@@ -139,78 +95,13 @@ char *buf, *fmt; {
 	buf[len-1] = 0;
 	return buf;
 }
-#else pmax
-
-char *sprintfl(buf, len, fmt, va_alist)
-int len;
-char *buf, *fmt;
-va_dcl
-{
-	FILE _strbuf;
-	va_list ap;
-
-#if defined(i386) || defined (__osf__)
-#ifdef	__osf__
-	_strbuf._ptr = (unsigned char *)buf;
-	_strbuf._flag = _IOSTRG;
-	_strbuf._cnt = 10000;
-#else   __osf__
-        _strbuf._bf._base = _strbuf._p = (unsigned char *)buf;
-	_strbuf._flags = __SWR | __SSTR;
-        _strbuf._bf._size = _strbuf._w = 10000;
-#endif  __osf
-	va_start(ap);
-	(void) vfprintf(&_strbuf, fmt, ap);
-	va_end(ap);
-	putc('\0', &_strbuf);
-	buf[len-1] = 0;
-	return buf;
-#else  __osf__ || i386
-	_strbuf._flag = _IOSTRG;
-	_strbuf._ptr = buf;
-	_strbuf._cnt = 10000;
-	va_start(ap);
-	(void)_doprnt(fmt, ap, &_strbuf);
-	va_end(ap);
-	putc('\0', &_strbuf);
-	buf[len-1] = 0;
-	return  buf;
-#endif i386
-}
-#endif pmax
 
 
-#if 0
-char *sprintfl(buf, len, fmt, va_alist)
-char *buf, *fmt;
-int len;
-va_dcl
-{
-	FILE _strbuf;
-	va_list ap;
-
-	va_start(ap);
-	_strbuf._flag = _IOSTRG;
-#ifdef	__osf__
-	_strbuf._ptr = (unsigned char *)buf;
-	_strbuf._cnt = 10000;
-	(void)_doprnt(fmt, ap, &_strbuf);
-#else 
-	_strbuf._ptr = (char *)buf;
-	_strbuf._cnt = 10000;
-	(void)_doprnt(fmt, ap, &_strbuf);
-#endif	__osf__
-	putc('\0', &_strbuf);
-	buf[len-1] = 0;
-	return buf;
-}
-#endif 0
 
 
 
 /* dump an error message; called like printf */
 /* VARARGS 1 */
-#ifndef pmax
 error (m)
 char * m; {
     NextLocalKeymap = 0;
@@ -224,30 +115,8 @@ char * m; {
     DumpMiniBuf++;
     if (StackTraceOnError && CurExec) DumpStackTrace ();
 }
-#else pmax
-error (fmt, va_alist)
-char *fmt;
-va_dcl
-{
-    va_list ap;
-
-    NextLocalKeymap = 0;
-    NextGlobalKeymap = 0;
-    if(err && MiniBuf) return;	/* the first error message probably makes the
-				   most sense, so we suppress subsequent
-				   ones. */
-    err++;
-    va_start(ap);
-    vsprintf(buf, fmt, ap);
-    va_end(ap);
-    MiniBuf = buf;
-    DumpMiniBuf++;
-    if (StackTraceOnError && CurExec) DumpStackTrace ();
-}
-#endif pmax
 /* dump an informative message to the minibuf */
 /* VARARGS 1 */
-#ifndef pmax
 message (m)
 char * m; {
     if(!interactive || err && MiniBuf) return;
@@ -255,24 +124,8 @@ char * m; {
     MiniBuf = buf;
     DumpMiniBuf++;
 }
-#else pmax
-message (fmt, va_alist)
-char *fmt;
-va_dcl
-{
-    va_list ap;
-
-    if(!interactive || err && MiniBuf) return;
-    va_start(ap);
-    vsprintf(buf, fmt, ap);
-    va_end(ap);
-    MiniBuf = buf;
-    DumpMiniBuf++;
-}
-#endif pmax
 /* read a number from the terminal with prompt string s */
 /* VARARGS 1 */
-#ifndef pmax
 getnum (s)
 char * s; {	/* gmcd */
     register char  *p,
@@ -297,33 +150,6 @@ char * s; {	/* gmcd */
     }
     return StrToInt (BrGetstr (1, "", &s)); /* gmcd */
 }
-#else pmax
-getnum (s)
-char *s;
- {	/* gmcd */
-    register char  *p,
-                   *answer;
-    if (CurExec) {		/* we are being called from an
-				   MLisp-called function.  Instead of
-				   prompting for a string we evaluate it
-				   from the arg list */
-	register larg = arg;
-	register enum ArgStates largstate = ArgState;
-	register n;
-	ArgState = NoArg;
-	if (++LastArgUsed >= CurExec -> p_nargs) {
-	    error ("Too few arguments given to %s",
-			CurExec -> p_proc -> b_name);
-	    return 0;
-	}
-	n = NumericArg (LastArgUsed+1);
-	arg = larg;
-	ArgState = largstate;
-	return n;
-    }
-    return StrToInt (BrGetstr (1, "", s, 0, 0, 0, 0)); /* gmcd */
-}
-#endif pmax
 
 StrToInt (answer)
 char *answer; {
@@ -357,62 +183,17 @@ char *answer; {
 
 /* Read a string from the terminal with prompt string s */
 /* VARARGS 1 */
-#ifndef pmax
 char   *getstr (s) {
     return BrGetstr (0, "", &s);
 }
-#else
-char   *getstr (va_alist)
-va_dcl
-{
-    va_list ap;
-    char *fmt;
-    char *arg0;
-    char *arg1;
-    char *arg2;
-    char *arg3;
-    
-    va_start(ap);
-    fmt = va_arg(ap, char *);
-    arg0 = va_arg(ap, char *);
-    arg1 = va_arg(ap, char *);
-    arg2 = va_arg(ap, char *);
-    arg3 = va_arg(ap, char *);
-    return BrGetstr (0, "", fmt, arg0, arg1, arg2, arg3);
-    va_end(ap);
-}
-#endif
 
 /* Read a string from the terminal with prompt string s, whitespace
    will terminate it. */
 
 /* VARARGS 1 */
-#ifndef pmax
 char   *getnbstr (s) {
     return BrGetstr (1, "", &s);
 }
-#else  pmax
-char   *getnbstr(va_alist)
-va_dcl
-{
-    va_list ap;
-    char *fmt;
-    char *arg0;
-    char *arg1;
-    char *arg2;
-    char *arg3;
-    
-    va_start(ap);
-
-    fmt = va_arg(ap, char *);
-    arg0 = va_arg(ap, char *);
-    arg1 = va_arg(ap, char *);
-    arg2 = va_arg(ap, char *);
-    arg3 = va_arg(ap, char *);
-    return BrGetstr (0, "", fmt, arg0, arg1, arg2, arg3);
-    va_end(ap);
-}
-#endif pmax
 
 int AutoHelp;			/* true iff ambiguous or misspelled words
 				   should create a help window (DJH) */
@@ -443,11 +224,7 @@ char *s; {
 
     if (RemoveHelpWindow) PopUpWindows = 0;
     prefix[0] = '\0';
-#ifdef	pmax
-    while (word = BrGetstr (1, prefix, s, 0, 0, 0, 0)) {
-#else
     while (word = BrGetstr (1, prefix, &s)) {
-#endif	pmax
 	len = strlen (word);
 	prefix[0] = '\0';
 	nfound = 0;
@@ -540,19 +317,9 @@ char *s; {
 /* read a string from the terminal with prompt string s.
    Whitespace will break iff breaksp is true.
    The string "prefix" behaves as though the user had typed that first. */
-#ifdef	pmax
-char   *BrGetstr (breaksp, prefix, fmt, arg0, arg1, arg2, arg3)
-char   *prefix;
-char   *fmt;
-char   *arg0;
-char   *arg1;
-char   *arg2;
-char   *arg3;
-#else
 char   *BrGetstr (breaksp, prefix, s)
 char   *prefix,
        ** s;
-#endif	pmax
 {
     register    larg = arg;
     register    enum ArgStates largstate = ArgState;
@@ -600,11 +367,7 @@ char   *prefix,
 	        OuterDot;
 	int     WindowNum = -1;
 	if (interactive) {
-#ifdef	pmax
-	    sprintf(lbuf, fmt, arg0, arg1, arg2, arg3);
-#else
 	    sprintrmt(lbuf, s);
-#endif	pmax
 	}
 	if (interactive) {
 	    DumpMiniBuf++;
@@ -677,15 +440,9 @@ char   *prefix,
 /* Get the name of a key.  Alas, you can't type a control-G,
    since that aborts the key name read.  Returns -1 if aborted. */
 /* VARARGS 2 */
-#ifndef pmax
 char   *getkey (map, prompt)
 register struct keymap *map;
 char *prompt;
-#else pmax
-char   *getkey (map, va_alist)
-register struct keymap *map;
-va_dcl
-#endif pmax
 {
     register    c;
     register char  *p,
@@ -693,9 +450,6 @@ va_dcl
     register    nkeys;
     static char FakeIt[30];
     static char lbuf[BufferSize];
-#ifdef pmax
-    va_list ap;
-#endif pmax
     if (CurExec) {
 	register larg = arg;
 	register enum ArgStates largstate = ArgState;
@@ -722,13 +476,7 @@ va_dcl
 	return FakeIt;
     }
     if (interactive) {
-#ifndef pmax
 	sprintrmt (lbuf, &prompt);
-#else pmax
-	va_start(ap);
-	vsprintf (lbuf, va_arg(ap, char *), ap);
-	va_end(ap);
-#endif pmax
 	p = lbuf + strlen (lbuf);
     }
     else

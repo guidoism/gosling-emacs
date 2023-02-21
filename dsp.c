@@ -13,16 +13,12 @@
 #include <stdio.h>
 #include <sys/types.h>
 
-#ifndef titan
 typedef long * waddr_t;
-#endif
 
 struct sgttyb old;		/* The initial tty mode bits */
-#ifdef HalfBaked
 static struct tchars OldTchars;
 static struct ltchars OldLtchars;
 static int OldLmode;
-#endif
 
 extern int EmacsFlowControl;				/* CEH 7/23/85 */
 
@@ -48,14 +44,9 @@ SetFlowControl() {
 
 InitDsp () {
     struct sgttyb   sg;
-#ifdef i386
-    static char _sobuf[BUFSIZ];
-#else  i386
     extern char _sobuf[];
-#endif i386
     ioctl(0, TIOCGETP, &old);
     sg = old;
-#ifdef HalfBaked
     ioctl (0, TIOCGETC, (waddr_t)&OldTchars);
     ioctl (0, TIOCGLTC, (waddr_t)&OldLtchars);
     ioctl (0, TIOCLGET, (waddr_t)&OldLmode);
@@ -85,9 +76,6 @@ InitDsp () {
 	ioctl (0, TIOCSLTC, (waddr_t)&ltchars);
 	ioctl (0, TIOCLSET, (waddr_t)&lmode);
     }
-#else
-    sg.sg_flags = (sg.sg_flags & ~(ECHO | CRMOD | XTABS)) | RAW;
-#endif
     ioctl(0, TIOCSETP, &sg);
     ScreenGarbaged = 1;
     setbuf (stdout, _sobuf);
@@ -110,11 +98,9 @@ RstDsp () {
     (*tt.t_wipeline) (0);
     (*tt.t_cleanup) ();
     fflush (stdout);
-#ifdef HalfBaked
     ioctl (0, TIOCSETC, (waddr_t)&OldTchars);
     ioctl (0, TIOCSLTC, (waddr_t)&OldLtchars);
     ioctl (0, TIOCLSET, (waddr_t)&OldLmode);
-#endif
     ioctl(0, TIOCSETP, &old);
 }
 

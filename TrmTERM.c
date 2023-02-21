@@ -194,9 +194,6 @@ init (BaudRate) {
     if (!inited)
         if (tgetent (tbuf, getenv ("TERM")) <= 0) {
             ioctl (1, TIOCSETP, &old);
-#ifdef OneEmacsPerTty   /* TPM 31-Jan-82 */
-            UnlockTty();
-#endif
             quit (1, "No environment-specified terminal type -- see TSET(1), sh(1)\n");
         }
     inited = 1;
@@ -235,9 +232,6 @@ init (BaudRate) {
         * (BaudRate / 10000.);
     if (CursStr == 0 || UP == 0 || ELstr == 0 || ESstr == 0) {
         ioctl (1, TIOCSETP, &old);
-#ifdef OneEmacsPerTty   /* TPM 31-Jan-82 */
-        UnlockTty();
-#endif
         quit (1, "Sorry, this terminal isn't powerful enough to run Emacs.\n\
 It is missing some important features.\n");
     }

@@ -60,9 +60,7 @@
 #include <sgtty.h>
 #include <sys/types.h>
 
-#ifndef titan
 typedef long * waddr_t;
-#endif
 
 char  *malloc(), *getenv();
 /* the following macros are used to access terminal specific routines.
@@ -505,17 +503,13 @@ register struct line	*old,
 	    op++, osp++;
 	while (*np == ' ' && np <= nl)
 	    np++, nsp++;
-#ifdef ACT
 	if (!NewHL && ol < op && !tt.t_needspaces)
 	    osp = nsp;
-#endif
 	while (*op == *np && op <= ol && np <= nl)
 	    op++, np++, m1++;
-#ifdef ACT
 	if (!NewHL && op > ol && !tt.t_needspaces)
 	    while (*np == ' ' && np <= nl)
 		np++, m1++;
-#endif
 	while (*ol == *nl && op <= ol && np <= nl)
 	    ol--, nl--, m2++;
     }
@@ -577,10 +571,6 @@ register struct line	*old,
 	if (m2 == 0) {
 	    if (od == 0 && nd == 0)
 		goto cleanup;
-#ifndef ACT
-	    if (od == 0 && !tt.t_needspaces)
-		osp = nsp;
-#endif
 	    topos (ln, (t = min (nsp, osp)) + 1);
 	    INSmode (0);
 	    if (nsp > osp)
@@ -619,10 +609,6 @@ register struct line	*old,
 		}
 		goto cleanup;
 	    }
-#ifndef ACT
-	    if (od == 0 && !tt.t_needspaces)
-		while (*np==' ') np++, m1++;
-#endif
 	    topos (ln, lsp + m1 + 1);
 	    INSmode (0);
 	    dumpstring (np, nl);
@@ -652,15 +638,9 @@ register struct line	*old,
 	}
     }
 cleanup:
-#ifdef FIONREAD
-#ifdef i386
-    if(--CheckForInput<0 && !InputPending){
-#else  i386
     if(--CheckForInput<0 && !InputPending &&
 				((stdout->_ptr - stdout->_base) > 20)){
-#endif i386
 	fflush (stdout);
-#ifdef TIOCOUTQ			/* prevent system I/O buffering */
 	if (baud_rate < 2400) {
 	    int out1;
 	    float outtime;
@@ -669,11 +649,9 @@ cleanup:
 	    outtime = ((float) out1) / ((float) baud_rate);
 	    if (outtime >= 1.5) sleep ((unsigned) (outtime - .5));
 	}
-#endif
 	ioctl (fileno(stdin), FIONREAD, (waddr_t)&InputPending);
 	CheckForInput = baud_rate / 2400;
     }
-#endif
 }
 
 visible procedure UpdateScreen (SlowUpdate) {
@@ -689,9 +667,7 @@ visible procedure UpdateScreen (SlowUpdate) {
 	    PhysScreen[n] = 0;
 	}
     }
-#ifdef FIONREAD			/* one quick test */
     if (!InputPending) ioctl (fileno(stdin), FIONREAD, (waddr_t)&InputPending);
-#endif
     if (CurrentLine >= 0
 	    && DesiredScreen[CurrentLine] -> length <= ScreenWidth - left)
 	DesiredScreen[CurrentLine] -> length =
@@ -787,22 +763,16 @@ Ding () {			/* BOGUS!  this should really be terminal
 hidden procedure SitFor () {
     register    num_chars, CharsPerInputCheck;
 
-#ifdef i386
-    if(InputPending || stdin->_r!= 0) return 0;
-#else  i386
     if(InputPending || stdin->_cnt!= 0) return 0;
-#endif i386
     CharsPerInputCheck = baud_rate / 100;
     num_chars = getnum (": sit-for ") * CharsPerInputCheck;
     DoDsp (1);			/* Make the screen correct */
     INSmode (0);
     while (num_chars-- && !InputPending){
-#ifdef FIONREAD
 	if ( ((num_chars+1) % CharsPerInputCheck) == 0){
 		fflush (stdout);
 		ioctl (fileno(stdin), FIONREAD, (waddr_t)&InputPending);
 	}
-#endif
 	putchar(0);			/* BOGUS */
     }
     return 0;
@@ -923,24 +893,6 @@ term_init () {
 /* Debugging routines -- called from sdb only */
 
 /* print out the insert/delete cost matrix */
-#ifdef DEBUG
-PrintM () {
-    register    i,
-                j;
-    register struct Msquare *p;
-    for (i = 0; i <= ScreenLength; i++) {
-	for (j = 0; j <= ScreenLength; j++) {
-	    p = &M[i][j];
-	    fprintf (stderr, "%4d%c", p -> cost,
-		    p -> fromi < i && p -> fromj < j ? '\\' :
-		    p -> fromi < i ? '^' :
-		    p -> fromj < j ? '<' : ' ');
-	}
-	fprintf (stderr, "\n");
-    }
-    fprintf (stderr, "\014");
-}
-#endif
 
 visible procedure
 NoOperation () {}

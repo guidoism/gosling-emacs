@@ -10,9 +10,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include "config.h"
-#ifdef	SuFeatures
 #include <ctype.h>
-#endif	SuFeatures
 
 int	UseUsersShell;		/* if 0, use /bin/sh always */
 int	UseCshOptionF;	     /* if 1 and UseUsersShell is 1, give -f to csh */
@@ -47,80 +45,6 @@ ReadPipe (fd, display) {
     return red;
 }
 
-#ifndef	SuFeatures
-/* execute a subprocess with the output being stuffed into the named
-   buffer. */
-ExecBf (buffer, display, input, erase, command)
-char   *buffer,
-       *command; {
-    struct buffer  *old = bf_cur;
-    int     fd[2];
-    int     pid,
-            status,
-            thispid;
-
-    SetBfn (buffer);
-    if(interactive) WindowOn (bf_cur);
-    if(erase) EraseBf (bf_cur);
-    pipe (fd);
-    if ((subproc_id = vfork ()) == 0) {
-	close (0);
-	close (1);
-	close (2);
-	if(open (input, 0) != 0) {
-	    write (fd[1], "Couldn't open input file\n", 25);
-	    _exit (-1);
-	}
-	dup (fd[1]);
-	dup (fd[1]);
-	close (fd[1]);
-	close (fd[0]);
-	execvp (command, &command);
-	write (1, "Couldn't execute the program!\n", 30);
-	_exit (-1);
-    }
-    close (fd[1]);
-    sigrelse(SIGCHLD);
-    ReadPipe (fd[0], interactive && display);
-    close (fd[0]);
-loop:
-    sighold(SIGCHLD);		/* We shouldn't have to hold the signal, but*/
-    if(subproc_id){		/* we will just in case */
-	sigpause(SIGCHLD);
-	goto loop;
-    }
-    sigrelse(SIGCHLD);
-
-    bf_modified = 0;
-    if(interactive) WindowOn (old);
-}
-
-/* pass the region starting at dot and extending for n characters through
-   the command.  The old contents of the region is left in the kill
-   buffer */
-FilterThrough (n, command, c2,c3,c4,c5,c6)
-char *command;
-char *c2;
-char *c3;
-char *c4;
-char *c5;
-char *c6;
-{
-	char tempfile[40];
-	register struct buffer *old = bf_cur;
-	register struct buffer *kill = DelToBuf (n, 0, 1, "Kill buffer");
-	strcpy(tempfile,"/tmp/emacsXXXXXX");
-	if (kill) kill->b_mode.md_NeedsCheckpointing = 0;
-	mktemp (tempfile);
-	SetBfn ("Kill buffer");
-	WriteFile (tempfile, 0);
-	chmod (tempfile, 0600);
-	SetBfp (old);
-	ExecBf (bf_cur->b_name, 0, tempfile, 0, command, c2,c3,c4,c5,c6);
-	bf_modified++;
-	unlink(tempfile);
-}
-#else
 /* execute a subprocess with the output being stuffed into the named
    buffer. ExecBf is called with the command as a list of strings as
    seperate arguments, ExecBfp is the same except that it is called with
@@ -220,7 +144,6 @@ char **command;
 	bf_modified++;
 	unlink(tempfile);
 }
-#endif
 
 IndentCProcedure () {
     register    pos = search ("^}", 1, dot - 3, 1);
@@ -337,19 +260,11 @@ loop:
 
 /* Relinquish control of the terminal to the shell */
 PauseEmacs () {
-#ifdef SIGTSTP
-#ifdef UciFeatures
     SuspendMpx();
-#endif
     RstDsp ();
     kill (0, SIGTSTP);
     InitDsp ();
-#ifdef UciFeatures
     ResumeMpx();
-#endif
-#else
-    error("pause-emacs doesn't work in this version of Unix.");
-#endif
     return 0;
 }
 
@@ -375,7 +290,6 @@ FilterRegion () {
     return 0;
 }
 
-#ifdef	SuFeatures
 static
 FastFilterRegion () {
     register char  *s;
@@ -407,7 +321,6 @@ FastFilterRegion () {
     }
     return 0;
 }
-#endif
 
 /* Parse all of the error messages found in a region */
 ParseErrorMessagesInRegion () {
@@ -431,9 +344,7 @@ InitProc () {
 	DefIntVar ("use-csh-option-f", &UseCshOptionF);
 	setkey (GlobalMap, (Ctl ('_')), ReturnToMonitor, "return-to-monitor");
 	defproc (FilterRegion, "filter-region");
-#ifdef	SuFeatures
 	defproc (FastFilterRegion, "fast-filter-region");
-#endif
 	defproc (ParseErrorMessagesInRegion,
 		 "parse-error-messages-in-region");
 	defproc (PauseEmacs, "pause-emacs");

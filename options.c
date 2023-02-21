@@ -642,11 +642,7 @@ register struct BoundName *p;
 	    case ProcBound: 
 		rv = (*p -> b_bound.b_proc) (-1);
 		if (ArgState != PreparedArg)
-#ifdef titan
-		    LastProc =  p -> b_bound.b_proc;
-#else
 		    LastProc = *p -> b_bound.b_proc;
-#endif
 		if (dot < FirstCharacter)
 		    SetDot (FirstCharacter);
 		if (dot > NumCharacters)

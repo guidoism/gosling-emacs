@@ -16,11 +16,8 @@
 #include <pwd.h>
 /* #include <sys/types.h> */
 #include <sys/param.h>
-#ifdef i386
-#else  i386
 #include <sys/cpustats.h>
 #include <sys/dk.h>
-#endif i386
 #include <sys/stat.h>
 
 struct tm *localtime ();
@@ -34,12 +31,10 @@ struct nlist    nl[] = {
     { 0 },
 };
 
-#ifndef i386
 struct {
     long	time[CPUSTATES];
     long	xfer[DK_NDRIVE];
 } s, s1;
-#endif i386
 
 double	etime;
 
@@ -52,10 +47,6 @@ int dflag = 0;			/* -d no disk statistics, +d yes */
 				/* default = no */
 int repetition;			/* repetition interval */
 
-#ifdef ONSUSP		/*  not really necessary, here as an exercise */
-jmp_buf env;
-int onsusp();
-#endif ONSUSP
 
 main (argc, argv)
 char  **argv;
@@ -90,16 +81,10 @@ char  **argv;
 	  uflag ? ((struct passwd *) getpwuid(getuid())) -> pw_name
 		: (char *) getenv("USER"));
 
-#ifdef ONSUSP
-    signal(SIGTSTP, onsusp);
-#endif ONSUSP
     while (1) {
 	register struct tm *nowt;
 	long    now;
 	float   avenrun[3];
-#ifdef ONSUSP
-	setjmp(env);
-#endif ONSUSP
 	time (&now);
 	nowt = localtime (&now);
 	lseek (kmem, (long) nl[0].n_value, 0);
@@ -112,7 +97,6 @@ char  **argv;
 	    nowt -> tm_min,
 	    nowt -> tm_hour>=12 ? "pm" : "am",
 	    avenrun[0]);
-#ifndef i386
 	lseek(kmem, (long)nl[X_CPTIME].n_value, 0);
  	read(kmem, s.time, sizeof s.time);
 	lseek(kmem, (long)nl[X_DKXFER].n_value, 0);
@@ -139,7 +123,6 @@ char  **argv;
 		printf (" [%d]", (int) (max/etime + 0.5));
 	    
 	}
-#endif i386
 	printf("%s", stat (mail, &st)>=0 && st.st_size ? " Mail" : "");
 	if (!nflag)
 	    putchar ('\n');
@@ -154,12 +137,3 @@ char  **argv;
     }
 }
 
-#ifdef ONSUSP
-onsusp()
-{
-    signal (SIGTSTP, SIG_DFL);
-    kill (0, SIGTSTP);
-    signal (SIGTSTP, onsusp);
-    longjmp (env, 0);
-}
-#endif ONSUSP

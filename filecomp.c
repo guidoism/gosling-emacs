@@ -17,9 +17,6 @@ static char rcsid[] = "$Header: U-filecomp.c,v 1.2 88/05/04 17:57:50 trewitt Exp
 #include "mlisp.h"
 #include <sys/param.h>
 #include <sys/types.h>
-#ifdef	__osf__
-#define	_BSD	/* BSD compatibility for directory structure names */
-#endif	__osf__
 #include <sys/dir.h>
 #include <sys/stat.h>
 
@@ -33,17 +30,11 @@ static char rcsid[] = "$Header: U-filecomp.c,v 1.2 88/05/04 17:57:50 trewitt Exp
 #define MANY		5
 
 #define min(a,b) ((a)<(b)?(a):(b))
-#ifdef	LIBNDIR
 #define max(a,b) ((a)>(b)?(a):(b))
 #define	WID	18
 #define	NCOLS	78
-#endif
 
-#ifndef	LIBNDIR
 static char path[MAXPATHLEN], file[MAXNAMLEN];
-#else
-static char path[MAXPATHLEN], file[MAXNAMLEN];
-#endif
 static struct stat st;
 static DirUsed;			/* Number of entries in DirEnts */
 static unsigned DirSize;	/* Number of bytes allocated to DirEnts */
@@ -61,12 +52,10 @@ extern	PopUpWindows;
 extern	RemoveHelpWindow;
 static	struct window  *killee;
 
-#ifdef	LIBNDIR
 int FastFileSearches;		/* If true (the default) then Emacs will
 				   not perform any fancy tests to determine
 				   what files the user is interested in
 				   during filename command completion */
-#endif
 
 static NewFilesInCompletion;	/* allow new files in completion routines */
 
@@ -214,12 +203,7 @@ top:
     }
     if (DirMatches == 1) {	/* Exact match on one name */
 	diving++;
-#ifndef	LIBNDIR
-	strncpy (name+pathlen, FirstMatch -> d_name, MAXNAMLEN);
-	*(name+pathlen+MAXNAMLEN) = 0;
-#else				/* already null terminated */
 	strcpy (name+pathlen, FirstMatch -> d_name);
-#endif
 	if (stat (name, &st) == 0 && st.st_mode & S_IFDIR)
 	    strcat (name, "/");
 	goto top;
@@ -233,24 +217,15 @@ top:
 
 	while (file[MatchSize] = FirstMatch -> d_name[MatchSize]) {
 	    MatchSize++;
-#ifndef	LIBNDIR
 	    if (MatchSize < MAXNAMLEN)
 		file[MatchSize] = 0;
-#else
-	    if (MatchSize < MAXNAMLEN)
-		file[MatchSize] = 0;
-#endif
 	    if (MarkDir (file) < oDirMatches) {
 		file[--MatchSize] = 0;
 		break;
 	    }
 	    extended++;
 	}
-#ifndef	LIBNDIR
-	strncpy (name+pathlen, file, MAXNAMLEN);/* (current path is correct) */
-#else
 	strcpy (name+pathlen, file);
-#endif
 	return extended || diving ? CONTIN : MANY;
     }
 }  /* PerformCompletion */
@@ -260,67 +235,6 @@ top:
    well.  Also, remember current table and only remake if new.
    Return -1 if we can't opendir() or allocate enough memory.  */
 
-#ifndef	LIBNDIR
-static
-ReadDir (dir)
-char *dir;
-{
-    static lastrv;
-    register struct direct *d, *p;
-    register char *s;
-    register f, l;
-
-    f = open (dir, 0);
-    if (f < 0)
-	return lastrv = -1;
-    fstat (f, &st);
-    if (st.st_mtime == DirMtime && st.st_dev == DirDevice
-			&& st.st_ino == DirInode) {
-	close (f);
-	return lastrv;
-    }
-    DirMtime = st.st_mtime;
-    DirDevice = st.st_dev;
-    DirInode = st.st_ino;
-    if (st.st_size >= DirSize) {
-	if (DirEnts)
-	    free ((char *) DirEnts);
-	DirSize = st.st_size + 30;
-	DirEnts = (struct direct *) malloc (DirSize);
-    }
-    DirSorted = 0;
-    lastrv = read (f, (char *) DirEnts, st.st_size + 1) != st.st_size;
-    close (f);
-    if (lastrv)
-	return lastrv;
-    p = DirEnts;
-    d = DirEnts;
-    for (f = st.st_size / sizeof *p; --f >= 0; p++) {
-	if (p -> d_ino == 0)
-	    continue;
-	s = p -> d_name;
-	if (s[0] == '.' && (s[1] == 0 || (s[1] == '.' && s[2] == 0)))
-	    continue;
-	l = MAXNAMLEN;
-	while (*s++ && --l >= 0);
-	--s;
-	switch (*--s) {
-	    case 'o':
-		if (*--s == '.')
-		    continue;
-	    case 'P':
-		if (*--s == 'K' && *--s == 'C' && *--s == '.')
-		    continue;
-	    case 'k':
-		if (*--s == 'a' && *--s == 'b' && *--s == '.')
-		    continue;
-	}
-	*d++ = *p;
-    }
-    DirUsed = d - DirEnts;
-    return 0;
-}
-#else
 static
 ReadDir (dir)
 char *dir;
@@ -380,21 +294,12 @@ again: ;
 	s = p -> d_name + p -> d_namlen;
 	if (p -> d_namlen > 2 && !strcmp (s - 2, ".o"))
 	    continue;
-#ifdef	PrependExtension
-	e = CheckpointExtension;
-	if (!strncmp (p -> d_name, e, strlen (e)))
-	    continue;
-	e = BackupExtension;
-	if (!strncmp (p -> d_name, e, strlen (e)))
-	    continue;
-#else
 	e = CheckpointExtension;
 	if (p -> d_namlen > (l = strlen (e)) && !strcmp (s - l, e))
 	    continue;
 	e = BackupExtension;
 	if (p -> d_namlen > (l = strlen (e)) && !strcmp (s - l, e))
 	    continue;
-#endif
 	if (FastFileSearches)
 	    goto no_tricks;
 	sprintfl (filnam, sizeof filnam, "%s/%s", dir, p -> d_name);
@@ -439,7 +344,6 @@ no_tricks: ;
     DirUsed = d - DirEnts;
     return (lastrv = 0);
 }
-#endif
 
 /* Mark all the table entries that match 'string' */
 static
@@ -447,17 +351,8 @@ MarkDir (string)
 char *string;
 {
     register struct direct *p;
-#ifndef	LIBNDIR
-    register len = MAXNAMLEN;
-    register char *s = string;
-#endif
 
-#ifndef	LIBNDIR
-    while (*s++ && --len >= 0) ;
-    MatchSize = s - string - 1;
-#else
     MatchSize = min (strlen (string), MAXNAMLEN);
-#endif
     DirMatches = 0;
     for (p = &DirEnts[DirUsed - 1]; p>=DirEnts; p--)
 	if (MatchSize == 0 || p->d_name[0]==string[0]
@@ -475,12 +370,8 @@ static
 DirCompare (p1, p2)
 register struct direct *p1, *p2;
 {
-#ifndef	LIBNDIR
-    return strncmp (p1 -> d_name, p2 -> d_name, MAXNAMLEN);
-#else
     return strncmp (p1 -> d_name, p2 -> d_name,
 	max (p1 -> d_namlen, p2 -> d_namlen));
-#endif
 }
 
 /* Write all the matched entries into "Help" buffer.  Sort first if needed. */
@@ -490,13 +381,8 @@ char *msg;
 {
     register struct direct *p;
     register i;
-#ifndef	LIBNDIR
-    register side = 0;
-    char buf[22];
-#else
     register pos, j;
     char buf[MAXNAMLEN + WID];
-#endif
 
     if (DirUsed > 1 && !DirSorted)
 	qsort (DirEnts, DirUsed, sizeof (struct direct), DirCompare);
@@ -506,15 +392,6 @@ char *msg;
     EraseBf (bf_cur);
     killee = wn_cur;
     InsStr (msg);
-#ifndef	LIBNDIR
-    for (p = DirEnts, i=DirUsed; --i>=0; p++) {
-	if (p -> d_ino) {
-	    sprintfl (buf, sizeof buf, (side==3 ? ((side=0), "%.*s\n")
-		  : (side++, "%-18.*s")), MAXNAMLEN, p -> d_name);
-	    InsStr (buf);
-	}
-    }
-#else
     for (p = DirEnts, i = DirUsed, pos = 0; --i >= 0; p++)
 	if (p -> d_ino) {
 	    if (pos > 0) {
@@ -528,7 +405,6 @@ char *msg;
 	    InsStr (buf);
 	    pos += p -> d_namlen +j;
 	}
-#endif
     BeginningOfFile ();
     bf_cur -> b_mode.md_NeedsCheckpointing = 0;
     bf_modified = 0;
@@ -545,18 +421,10 @@ char *dir, *file; {
     if (d) {
 	strncpy (dir, path, d - path);
 	dir[d-path] = 0;
-#ifndef	LIBNDIR
 	strncpy (file, d, MAXNAMLEN);
-#else
-	strncpy (file, d, MAXNAMLEN);
-#endif
     } else {
 	dir[0] = 0;
-#ifndef	LIBNDIR
 	strncpy (file, path, MAXNAMLEN);
-#else
-	strncpy (file, path, MAXNAMLEN);
-#endif
     }
 }
 
@@ -593,14 +461,9 @@ GetExistingFile () {
 }
 
 InitFComp () {
-#ifdef DumpableEmacs
-    if (!Once)
-#endif
     {
-#ifdef	LIBNDIR
 	DefIntVar ("fast-file-searches", &FastFileSearches);
 	FastFileSearches = 1;
-#endif	LIBNDIR
 	DefIntVar ("new-files-in-completion", &NewFilesInCompletion);
 	NewFilesInCompletion = 1;
 	defproc (GetExistingFile, "get-existing-file");

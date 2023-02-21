@@ -86,24 +86,14 @@ inslines (n) {
 	setHL ();
 	tputs(tgoto (SetScrollRegion, WindowSize-1, curY-1), 0, dumpchar);
 #define useinsertlines
-#ifdef useinsertlines
 	tputs(tgoto (InsertLinesStr, 0, n), n, dumpchar);
-#else
-       while (--n >= 0)
-               printf(InsertLineStr);
-#endif
 	tputs(tgoto (SetScrollRegion, tt.t_length-1, 0), 0, dumpchar);
 };
 
 static
 dellines (n) {
 	tputs(tgoto (SetScrollRegion, WindowSize-1, curY-1), 0, dumpchar);
-#ifdef useinsertlines
 	tputs(tgoto (DeleteLinesStr, 0, n), n, dumpchar);
-#else
-       while (--n >= 0)
-               printf(DeleteLineStr);
-#endif
 	tputs(tgoto (SetScrollRegion, tt.t_length-1, 0), 0, dumpchar);
 }
 

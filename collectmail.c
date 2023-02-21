@@ -138,21 +138,9 @@ char *mbf; {
     if (mbf==0) return;
     if (stat (mbf, &st) < 0 || st.st_size <= 0)
 	return;
-#ifndef FXMUPD
     if ((in = fopen (mbf, "r")) == 0)
 	return;
     lock(mbf);				/* lock the mail file */
-#else
-    { static mode = FXMUPD; int lock;int infd;
-    while ((infd = open (mbf, 2))<0 && errno==EBUSY
-		|| (lock = ioctl (infd, FIOCXMOD, &mode))<0 && errno==EBUSY) {
-	if (infd>=0) close(infd);
-	sleep (5);
-    }
-    if (lock<0 || infd<0) perror("collectmail");
-    in = fdopen (infd, "r");
-    }
-#endif
     if (in==0) return;
     while (1) {
 	char    line[BUFSIZ];
@@ -203,9 +191,7 @@ char *mbf; {
 				   here, but I can't truncate the file
 				   without closing it and losing the lock */
     creat (mbf, 0600);
-#ifndef	FXMUPD
     unlock();				/* unlock the mail file */
-#endif
 }
 
 extractfield (line, field, buf, bufsz)

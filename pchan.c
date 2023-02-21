@@ -9,30 +9,16 @@
 /* Changes for 4.1cBSD by Chris Kent of Dec-Wrl */
 
 #include "config.h"
-#ifndef	MPXcode			/* the entire file!!! */
 
-#ifndef	subprocesses
-#undef	TTYconnect
-#endif	not subprocesses
 
 #include <stdio.h>
 #include <signal.h>
 #include <errno.h>
 #include <wait.h>
 #include <sgtty.h>
-#ifdef	BSD41c
 #include <time.h>
-#endif	BSD41c
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef	TTYconnect
-#include <sys/socket.h>
-#ifndef	BSD41c
-#include <net/in.h>
-#else	not BSD41c
-#include <netinet/in.h>
-#endif	not BSD41c
-#endif	TTYconnect
 #include "window.h"
 #include "keyboard.h"
 #include "buffer.h"
@@ -41,7 +27,6 @@
 #include "mchan.h"
 
 
-#ifdef	subprocesses
 
 extern	int	child_changed;	/* all these from schan.c */
 extern	int	PopUpUnexpected;
@@ -63,40 +48,6 @@ static	struct tchars mytchars;
 static	struct ltchars myltchars;
 static	int mylmode;
 
-#ifdef	TTYconnect
-#ifndef	BSD41c
-#define	SO_OPTIONS	(SO_ACCEPTCONN | SO_DONTLINGER | SO_KEEPALIVE)
-#else	not BSD41c
-#undef	TTYD
-#endif	not BSD41c
-#ifndef	TTYD
-#define	IPPORT_EMACS	010000
-#endif	not TTYD
-
-#ifndef	BSD41c
-#define	htons(x)	(((x << 8) & 0xff00) | ((x >> 8) & 0xff))
-#define	ntohs(x)	(((x << 8) & 0xff00) | ((x >> 8) & 0xff))
-#endif	not BSD41c
-
-#define	NOTOK		(-1)
-#define	OK		0
-
-static int  tty_port;
-#ifdef	TTYD
-static char myhost[BUFSIZ];
-static char myport[BUFSIZ];
-#endif	TTYD
-
-static int  sd;
-static struct sockaddr_in   tty_socket;
-static struct sockaddr_in   unx_socket;
-
-#ifdef	mtr
-static  FILE * log_file;
-#endif
-
-char   *RAddr ();
-#endif	TTYconnect
 
 
 /* Find a free pty and open it. */
@@ -160,9 +111,6 @@ register char  *command;
     }
 
     if (pid == 0) {
-#ifdef	ce
-	fprintf (err_file, "Creating pid %d on %s\n", getpid (), ptyname);
-#endif
 	close (channel);
 	sigrelse (SIGCHLD);
 	setpgrp (0, getpid ());
@@ -189,12 +137,6 @@ register char  *command;
 	ioctl (0, TIOCSLTC, &myltchars);
 	ioctl (0, TIOCLSET, &mylmode);
 	len = 0;			/* set page features to 0 */
-#ifdef	TIOCSWID
-	ioctl (0, TIOCSWID, &len);	/* page width */
-#endif
-#ifdef	TIOCSLEN
-	ioctl (0, TIOCSLEN, &len);	/* page len (CCA uses TIOCSSCR) */
-#endif
 	len = UseUsersShell;
 	UseUsersShell = 1;
 	ld = strcmp(shell(), "/bin/csh") ? OTTYDISC : NTTYDISC;
@@ -219,7 +161,6 @@ register char  *command;
     current_process -> p_chan.ch_outrec.ccount = 0;
     return 0;
 }
-#endif	subprocesses
 
 
 /* This corresponds to the filbuf routine used by getchar.  This handles all 
@@ -244,27 +185,16 @@ static int  mpx_count;		/* number of unprocessed characters in
 				   buffer */
 
 /* ARGSUSED */
-#ifdef	ECHOKEYS
 fill_chan (chan, alrmtime)
-#else	ECHOKEYS
-fill_chan (chan)
-#endif	ECHOKEYS
 register struct channel_blk *chan;
 {
     int ichans, ochans, cc;
     register struct channel_blk *this_chan;
     register struct process_blk *p;
-#ifdef	ECHOKEYS
-#ifdef	BSD41c
     struct timeval	timeout;
-#endif	BSD41c
 
     if (alrmtime <= 0 || alrmtime > 100000000)
 	alrmtime = 100000;
-#ifndef	BSD41c
-    alrmtime *= 1000;			/* convert to millisec */
-#endif	not BSD41c
-#endif	ECHOKEYS
 
 readloop:
     if (err != 0)			/* check for ^G interrupts */
@@ -280,48 +210,23 @@ readloop:
      */
     if (child_changed) {
 	int c_ichans = ichans;
-#ifdef	BSD41c
 	timeout.tv_sec = 0; timeout.tv_usec = 0;
 	if (select(32, &c_ichans, 0, 0, &timeout) <= 0)	/* if none waiting */
-#else	BSD41c
-	if (select(32, &c_ichans, 0, 0) <= 0)	/* if none waiting */
-#endif	BSD41c
 	{
 	    change_msgs ();
 	    child_changed = 0;
 	}
     }
 
-#ifdef	ECHOKEYS
-#ifdef	BSD41c
     timeout.tv_sec = alrmtime; timeout.tv_usec = 0;
     if ((cc = select(32, &ichans, &ochans, 0, &timeout)) < 0)
-#else	BSD41c
-    if ((cc = select(32, &ichans, &ochans, alrmtime)) < 0)
-#endif	BSD41c
 	goto readloop;			/* try again */
     else
 	if (cc == 0) {
 	    EchoThem (1);
-#ifndef	BSD41c
-	    alrmtime = 10000000;
-#else	not BSD41c
 	    alrmtime = 10000;
-#endif	not BSD41c
 	}
-#else	ECHOKEYS
-#ifdef	BSD41c
-    timeout.tv_sec = 100000; timeout.tv_usec = 0;
-    if (select(32, &ichans, &ochans, 0, &timeout) < 0)
-#else	BSD41c
-    if (select(32, &ichans, &ochans, 1000000) < 0)
-#endif	BSD41c
-	goto readloop;			/* try again */
-#endif	ECHOKEYS
 
-#ifdef	TTYconnect
-    AttachSocket (ichans);		/* check for a new socket */
-#endif	TTYconnect
 
     if (ichans&1) {
         ichans &= ~1;
@@ -355,21 +260,9 @@ readloop:
 	    }
             else if (cc <= 0)
 	    {
-#ifdef	ce
-		fprintf (err_file, "%s read from %s on channel %d errno=%d\n",
-			cc == 0 ? "null" : "error", p -> p_name,
-			this_chan -> ch_index, cc < 0 ? errno : 0);
-#endif
 		sel_ichans &= ~(1 << this_chan -> ch_index); /* disconnect */
 		sel_ochans &= ~(1 << this_chan -> ch_index); /* disconnect */
 		close (this_chan->ch_index);
-#ifdef	TTYconnect
-		if (p -> p_pid == -1) {/* peer dropped it */
-		    p -> p_flag = EXITED | CHANGED;
-		    p -> p_reason = 0;
-		    child_changed++;
-		}
-#endif	TTYconnect
 	    }
 	}
 	if (ochans & (1<<this_chan->ch_index)) {
@@ -404,7 +297,6 @@ readloop:
 }
 
 
-#ifdef	subprocesses
 
 /* Send any pending output as indicated in the process block to the 
    appropriate channel. */
@@ -471,10 +363,6 @@ sig_process (signal, leader) register   leader; {
 	return 0;
     }
 
-#ifdef	ce
-    fprintf (err_file, "Sending signal %d to proc (%d, %d), leader=%d\n",
-	signal, process -> p_pid, process -> p_gid, leader);
-#endif
 
 /* We must update the process flag explicitly in the case of continuing a 
    process since no signal will come back */
@@ -513,24 +401,8 @@ sig_process (signal, leader) register   leader; {
 
     leader = leader ? process -> p_pid : process -> p_gid;
 
-#ifndef	TTYconnect
     if (leader != -1)
 	killpg (leader, signal);
-#else	not TTYconnect
-    if (leader != -1)
-	killpg (leader, signal);
-    else
-	if (process -> p_pid == -1 && signal == SIGKILL) {
-	    sel_ichans &= ~(1 << process -> p_chan.ch_index);
-	    sel_ochans &= ~(1 << process -> p_chan.ch_index);
-	    close (process -> p_chan.ch_index);
-	    sighold (SIGCHLD);
-	    process -> p_flag = SIGNALED | CHANGED;
-	    process -> p_reason = SIGKILL;
-	    child_changed++;
-	    sigrelse (SIGCHLD);
-	}
-#endif	not TTYconnect
     return 0;
 }
 
@@ -592,7 +464,6 @@ PID (leader) {
     }
     return 0;
 }
-#endif	subprocesses
 
 
 /* Initialize the PTYio system. */
@@ -605,17 +476,11 @@ PID (leader) {
    Hence, fill_chan() will handle things for us. */
 
 InitProcesses () {
-#ifdef	TTYconnect
-#ifndef	TTYD
-    struct stat st;
-#endif	not TTYD
-#endif	TTYconnect
 
     mpxin -> ch_index = 0;
     mpxin -> ch_ptr = NULL;
     mpxin -> ch_count = 0;
 
-#ifdef	subprocesses
     sel_ichans = 1 << 0;	/* stdin */
 
     ioctl (0, TIOCGETP, &mysgttyb);
@@ -624,52 +489,11 @@ InitProcesses () {
     ioctl (0, TIOCGLTC, &myltchars);
     ioctl (0, TIOCLGET, &mylmode);
 
-#ifdef	TTYconnect
-    sigset (SIGPIPE, SIG_IGN);
-
-#ifndef	TTYD
-    if (fstat (0, &st) == NOTOK)
-	quit (1, "fstat failed on stdin\n");
-    tty_port = IPPORT_EMACS | minor (st.st_rdev);
-#else	not TTYD
-    gethostname (myhost, sizeof myhost);
-    tact ("push", NULL);
-#endif	not TTYD
-
-#ifdef	mtr
-    if (access ("/tmp/emacs.tcpdebug", 6) == NOTOK)
-	unlink ("/tmp/emacs.tcpdebug");
-    if ((log_file = fopen ("/tmp/emacs.tcpdebug", "a")) != NULL) {
-	setbuf (log_file, NULL);
-	fprintf (log_file, "tty_port=%d\n", tty_port);
-#ifdef	TTYD
-	fprintf (log_file, "myhost=%s\n", myhost);
-#endif	TTYD
-	chmod ("/tmp/emacs.tcpdebug", 0666);
-    }
-#endif
-
-#ifndef	BSD41c
-    sd = NOTOK;
-#else	not BSD41c
-    StartTtyAccept ();
-#endif	not BSD41c
-#endif	TTYconnect
-#endif	subprocesses
 }
 
 /* named this way for historical reasons... */
 
 QuitMpx () {
-#ifdef	TTYconnect
-#ifdef	TTYD
-    tact ("pop", NULL);
-#endif	TTYD
-#ifdef	mtr
-    if (log_file)
-	fclose (log_file);
-#endif
-#endif	TTYconnect
 }
 
 /* This isn't quite correct, the close() should do it, but Unix doesn't
@@ -677,474 +501,10 @@ QuitMpx () {
    the port is still open for business. */
 
 SuspendMpx () {
-#ifdef	TTYconnect
-#ifdef	TTYD
-    tact ("pop", NULL);
-#endif	TTYD
-#ifndef	BSD41c
-#ifndef	TTYD
-    if (sd != NOTOK) {
-	sel_ichans &= ~(1 << sd);
-	close (sd);
-	sd = NOTOK;
-    }
-#endif	not TTYD
-#else	not BSD41c
-    sel_ichans &= ~(1 << sd);
-    close (sd);
-#endif	not BSD41c
-#endif	TTYconnect
 }
 
 ResumeMpx () {
-#ifdef	TTYconnect
-#ifdef	TTYD
-    tact ("push", NULL);
-    if (sd != NOTOK) {
-	int     i;
-	struct sockaddr_in *tsock = &tty_socket;
-
-	if ((i = socketaddr (sd, tsock)) != NOTOK) {
-#ifdef	vax
-	    tsock -> sin_port = htons (tsock -> sin_port);
-#endif
-	    i = tact ("port", tsock);
-	}
-	if (i == NOTOK) {
-	    sel_ichans &= ~(1 << sd);
-	    close (sd);
-	    sd = NOTOK;
-	}
-    }
-#endif	TTYD
-#ifdef	BSD41c
-    StartTtyAccept ();
-#endif	BSD41c
-    if (EmacsShare == NOTOK)	/* retry from error */
-	EmacsShare = 1;
-#endif	TTYconnect
 }
 
 
-#ifdef	TTYconnect
 
-static	AttachSocket (mask)
-int mask;
-{
-    int     enabled = (EmacsShare > 0) && sflag;
-    struct sockaddr_in *usock = &unx_socket;
-#ifdef	BSD41c
-    int	    s, usocklen;
-#endif	BSD41c
-
-#ifndef	BSD41c
-    if (sd == NOTOK) {
-	if (enabled)
-	    NewSocket ();
-	return;
-    }
-#endif	not BSD41c
-
-    if (!(mask & (1 << sd)))
-	return;
-
-#ifndef	BSD41c
-    if (accept (sd, usock) == NOTOK) {
-#else	not BSD41c
-    usocklen = sizeof (*usock);
-    if ((s = accept (sd, usock, &usocklen)) == NOTOK) {
-#endif	not BSD41c
-	switch (errno) {
-	    default: 
-		message ("unable to complete socket: %s",
-			errno > 0 && errno <= sys_nerr ? sys_errlist[errno]
-			: "unknown reason");
-		EmacsShare = NOTOK;
-
-	    case ECONNRESET: 	/* we were not quick enough... */
-	    case EISCONN:	/* should not happen */
-	    case EWOULDBLOCK:	/* select lied to us */
-#ifdef	mtr
-		if (log_file)
-		    fprintf (log_file, "unable to complete socket: %d\n",
-			    errno);
-#endif
-		break;
-	}
-#ifndef	BSD41c
-	sel_ichans &= ~(1 << sd);
-	close (sd);
-	sd = NOTOK;
-	if (enabled)
-	    NewSocket ();
-#endif	not BSD41c
-	return;
-    }
-
-#if vax
-    usock -> sin_port = ntohs (usock -> sin_port);
-#endif
-
-#ifdef	BSD41c
-    sel_ichans |= (1 << s);
-#endif	BSD41c
-    if (!enabled) {		/* we do not want it now */
-#ifndef	BSD41c
-	sel_ichans &= ~(1 << sd);
-	close (sd);
-	sd = NOTOK;
-#else	not BSD41c
-	sel_ichans &= ~(1 << s);
-	close (s);
-#endif	not BSD41c
-	return;
-    }
-
-#ifdef	mtr
-    if (log_file) {
-	struct sockaddr_in *tsock = &tty_socket;
-	socketaddr (sd, tsock);
-#ifdef	vax
-	tsock -> sin_port = htons (tsock -> sin_port);
-#endif
-	fprintf (log_file,
-		"socket completed from port_%s:%d to port_%s:%d\n",
-		RAddr (&(tsock -> sin_addr)), tsock -> sin_port,
-		RAddr (&(usock -> sin_addr)), usock -> sin_port);
-    }
-#endif
-
-    if (usock -> sin_family != AF_INET) {/* wrong family */
-#ifndef	BSD41c
-	sel_ichans &= ~(1 << sd);
-	close (sd);
-	sd = NOTOK;
-#else	not BSD41c
-	sel_ichans &= ~(1 << s);
-	close (s);
-#endif	not BSD41c
-    }
-    else
-#ifndef	BSD41c
-	BuildIt ();
-#else	not BSD41c
-	BuildIt (s);
-#endif	not BSD41c
-
-#ifndef	BSD41c
-    NewSocket ();
-#endif	not BSD41c
-}
-
-
-#ifndef	BSD41c
-
-static  NewSocket () {
-    struct sockaddr_in *tsock = &tty_socket;
-
-    if (!sflag)
-	return;
-
-    if ((sd = getport (tsock, SO_OPTIONS)) == NOTOK)
-	switch (errno) {
-	    default:		/* perhaps do something else here??? */
-		message ("unable to start socket: %s",
-			errno > 0 && errno <= sys_nerr ? sys_errlist[errno]
-			: "unknown reason");
-
-#ifndef	TTYD
-	    case EADDRINUSE:	/* another Emacs on this tty */
-	    case EADDRNOTAVAIL:	/* should not happen */
-#endif	not TTYD
-		EmacsShare = NOTOK;/* enough of this nonsense */
-#ifdef	mtr
-		if (log_file)
-		    fprintf (log_file, "unable to start socket: %d\n",
-			    errno);
-#endif
-		return;
-	}
-
-    sel_ichans |= 1 << sd;
-}
-
-static int  getport (tsock, options)
-struct sockaddr_in  *tsock;
-unsigned    options;
-{
-    int     block = 1;
-    int     fd;
-#ifdef	TTYD
-    int     port;
-#endif	TTYD
-
-    tsock -> sin_family = AF_INET;
-#ifndef	TTYD
-    tsock -> sin_port = tty_port;
-#ifdef	vax
-    tsock -> sin_port = htons (tsock -> sin_port);
-#endif
-#endif	not TTYD
-    tsock -> sin_addr.s_addr = (u_long) INADDR_ANY;
-
-#ifndef	TTYD
-    if ((fd = socket (SOCK_STREAM, NULL, tsock, options)) == NOTOK)
-	return NOTOK;
-#ifdef	vax
-    tsock -> sin_port = ntohs (tsock -> sin_port);
-#endif
-#else	not TTYD
-    for (port = IPPORT_RESERVED + 1;; port++) {
-	tsock -> sin_port = port;
-#ifdef	vax
-	tsock -> sin_port = htons (tsock -> sin_port);
-#endif
-
-	if ((fd = socket (SOCK_STREAM, NULL, tsock, options)) == NOTOK)
-	    switch (errno) {
-		case EADDRINUSE:/* to be expected */
-		case EADDRNOTAVAIL:/* should not happen */
-		    continue;
-
-		default: 
-		    return NOTOK;
-	    }
-#ifdef	vax
-	tsock -> sin_port = ntohs (tsock -> sin_port);
-#endif
-	break;
-    }
-    if (tact ("port", tsock) == NOTOK) {
-	close (fd);
-	return NOTOK;
-    }
-#endif	not TTYD
-
-    ioctl (fd, FIONBIO, &block);
-    return fd;
-}
-#else	not BSD41c
-
-static	StartTtyAccept()
-{
-    struct sockaddr_in *tsock = &tty_socket;
-    int block = 1;
-
-    if (!sflag) {
-	sd = NOTOK;
-	return;
-    }
-
-    sd = socket(AF_INET, SOCK_STREAM, 0);
-    if(sd < 0)
-	switch (errno) {
-	    default:		/* perhaps do something else here??? */
-		message ("unable to start socket: %s",
-			errno > 0 && errno <= sys_nerr ? sys_errlist[errno]
-			: "unknown reason");
-
-		EmacsShare = NOTOK;/* enough of this nonsense */
-#ifdef	mtr
-		if (log_file)
-		    fprintf (log_file, "unable to start socket: %d\n",
-			    errno);
-#endif
-		return;
-	}/*esac*/
-
-    tsock -> sin_family = AF_INET;
-    tsock -> sin_port = tty_port;
-#ifdef	vax
-    tsock -> sin_port = htons (tsock -> sin_port);
-#endif
-    tsock -> sin_addr.s_addr = (u_long) INADDR_ANY;
-
-    setsockopt(sd, SOL_SOCKET, SO_DONTLINGER, (char *) 0, 0);
-    setsockopt(sd, SOL_SOCKET, SO_KEEPALIVE, (char *) 0, 0);
-    setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, (char *) 0, 0);
-    if(bind(sd, tsock, sizeof(*tsock)) < 0)
-	switch (errno) {
-	    default:		/* perhaps do something else here??? */
-		message ("unable to bind socket: %s",
-			errno > 0 && errno <= sys_nerr ? sys_errlist[errno]
-			: "unknown reason");
-
-	    case EADDRINUSE:	/* another Emacs on this tty */
-	    case EADDRNOTAVAIL:	/* should not happen */
-		EmacsShare = NOTOK; /* enough of this nonsense */
-#ifdef	mtr
-		if (log_file)
-		    fprintf (log_file, "unable to bind socket: %d\n",
-			    errno);
-#endif
-		return;
-	}/*esac*/
-#ifdef	vax
-    tsock -> sin_port = ntohs (tsock -> sin_port);
-#endif
-
-    listen(sd, 5);
-    ioctl(sd, FIOCLEX, 0);
-    sel_ichans |= 1 << sd;
-}
-#endif	not BSD41c
-
-#ifndef	BSD41c
-static  BuildIt () {
-#else	not BSD41c
-static	BuildIt (s) {
-#endif	not BSD41c
-    int     i;
-    char    name[50],
-            port[40];
-    struct in_addr *addr = &unx_socket.sin_addr;
-    struct buffer  *old = bf_cur;
-    struct process_blk *p;
-
-    sighold (SIGCHLD);
-
-    sprintf (port, "port_%s/%d", RAddr (addr), unx_socket.sin_port);
-    for (i = 2, strcpy (name, port); find_process (name); i++)
-	sprintfl (name, sizeof name, "%s<%d>", port, i);
-
-    p = (struct process_blk *) malloc ((unsigned) sizeof *p);
-    if (p == NULL) {
-	sigrelse (SIGCHLD);
-	message ("out of memory");
-#ifndef	BSD41c
-	sel_ichans &= ~(1 << sd);
-	close (sd);
-#else	not BSD41c
-	sel_ichans &= ~(1 << s);
-	close (s);
-#endif	not BSD41c
-	sd = NOTOK;
-	return;
-    }
-
-    SetBfn (name);
-    if (PopUpUnexpected)
-	WindowOn (bf_cur);
-    bf_modified = 0;
-    bf_cur -> b_mode.md_NeedsCheckpointing = 0;
-
-#ifndef	BSD41c
-    sel_ichans |= 1 << sd;	/* not really needed */
-#endif	not BSD41c
-    p -> next_process = process_list;
-    process_list = p;
-    p -> p_name = savestr (name);
-    p -> p_pid = p -> p_gid = -1;
-    p -> p_flag = RUNNING | CHANGED;
-#ifndef	BSD41c
-    p -> p_chan.ch_index = sd;
-    p -> p_chan.ch_outrec.index = sd;
-#else	not BSD41c
-    p -> p_chan.ch_index = s;
-    p -> p_chan.ch_outrec.index = s;
-#endif	not BSD41c
-    p -> p_chan.ch_outrec.count = p -> p_chan.ch_outrec.ccount = 0;
-    p -> p_chan.ch_outrec.data = NULL;
-    p -> p_chan.ch_ptr = NULL;
-    p -> p_chan.ch_count = 0;
-    p -> p_chan.ch_buffer = bf_cur;
-    p -> p_chan.ch_proc = UnexpectedProc;
-    p -> p_chan.ch_sent = UnexpectedSent;
-
-    sigrelse (SIGCHLD);
-
-    SetBfp (old);
-    if (PopUpUnexpected)
-	WindowOn (bf_cur);
-}
-
-#ifdef	TTYD
-
-static int  tact (cmd, sock)
-char   *cmd;
-struct sockaddr_in *sock;
-{
-    extern int  subproc_id,
-                child_sig ();
-#ifdef	mtr
-    if (log_file)
-	fprintf (log_file, sock ? "tact(%s,%d)\n" : "tact(%s,NULL)\n",
-		cmd, sock ? sock -> sin_port : 0);
-#endif
-    if (!sflag)
-	return NOTOK;
-
-    if (sock)
-	if (tty_port == sock -> sin_port)
-	    return;
-	else
-	    tty_port = sock -> sin_port;
-    else
-	tty_port = NOTOK;
-
-    sigset (SIGCHLD, child_sig);/* may not be set yet */
-
-    sighold (SIGCHLD);
-    switch (subproc_id = vfork ()) {
-	case NOTOK: 
-	    return NOTOK;
-
-	case OK: 
-	    sigrelse (SIGCHLD);
-	    setpgrp (0, getpid ());
-	    sigsys (SIGINT, SIG_IGN);
-	    sigsys (SIGQUIT, SIG_IGN);
-	    sigsys (SIGTERM, SIG_IGN);
-	    sigsys (SIGTSTP, SIG_IGN);
-	    sigsys (SIGTTOU, SIG_IGN);
-	    close (0);
-	    open ("/dev/null", 0);
-	    dup2 (0, 1);
-	    if (sock) {
-		sprintfl (myport, sizeof myport, "%d", sock -> sin_port);
-		execlp ("tact", "tact", "-quiet", cmd, myhost, myport, NULL);
-	    }
-	    else
-		execlp ("tact", "tact", "-quiet", cmd, NULL);
-	    _exit (1);
-
-	default: 
-#ifdef	mtr
-	    if (log_file)
-		fprintf (log_file, "begin wait for %d\n", subproc_id);
-#endif		
-	    sigrelse (SIGCHLD);
-	    for (sighold (SIGCHLD); subproc_id; sighold (SIGCHLD)) {
-#ifdef	mtr
-		if (log_file)
-		    fprintf (log_file, "waiting for %d\n", subproc_id);
-#endif		
-		sigpause (SIGCHLD);
-	    }
-	    sigrelse (SIGCHLD);
-	    return OK;
-    }
-}
-#endif
-
-static char	*RAddr(ip)
-struct	in_addr	*ip;
-{
-    static char host[200];
-    char   *p,
-           *raddr ();
-
-    if (p = raddr ((int) (ip -> s_addr))) {
-	strcpy (host, p);
-	free (p);
-	return host;
-    }
-
-    sprintfl (host, sizeof host, "%d.%d.%d.%d",
-	    ip -> S_un.S_un_b.s_b1, ip -> S_un.S_un_b.s_b2,
-	    ip -> S_un.S_un_b.s_b3, ip -> S_un.S_un_b.s_b4);
-    return host;
-}
-#endif	TTYconnect
-
-#endif	not MPXcode

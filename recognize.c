@@ -14,10 +14,6 @@ static char *SCCSid =
 #include <signal.h>
 #include <pwd.h>
 /* Don't include stdio.h!  Csh doesn't like it!! */
-#ifdef TEST
-#include <stdio.h>
-#define flush()		fflush(stdout)
-#endif
 
 extern short SHIN, SHOUT;
 
@@ -537,30 +533,3 @@ int     inputline_size;
     return (num_read);
 }
 
-#ifdef TEST
-
-short SHIN = 0, SHOUT = 1;
-
-printprompt ()
-{
-    (void) write (SHOUT, "-> ", 3);
-    return (1);
-}
-
-main (argc, argv)
-char **argv;
-{
-    char    string[128];
-    int	    numitems;
-
-    if (argc > 1)
-    {
-	copyn(string, argv[1], 127);
-	numitems = recognize(string, RECOGNIZE);
-	printf("%d: %s", numitems, string);
-    }
-    else
-	while (printprompt () && tenex (string, 127))
-	    printf (" I saw \"%s\"\n", string);
-}
-#endif

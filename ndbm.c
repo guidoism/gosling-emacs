@@ -377,18 +377,12 @@ char    buf[PBLKSIZ];
     if (n > 0)
 	t = sp[n + 1 - 1];
     lp = (long *) (buf + sp[n + 1]);
-#ifdef	notdef
-    /* doing it this way causes alignment errors */
-    item.val1 = *lp++;
-    item.val2 = *lp++;
-#else
     bcopy(lp, &temp, sizeof(long));
     item.val1 = temp;
     lp++;
     bcopy(lp, &temp, sizeof(long));
     item.val2 = temp;
     lp++;
-#endif
     item.dptr = (char *) lp;
     item.dsize = t - sp[n + 1] - 2*sizeof(long);
     return (item);

@@ -88,9 +88,6 @@ char   *ttyptr;
 
     tsock -> sin_family = AF_INET;
     tsock -> sin_port = 0;
-#ifdef vax
-    tsock -> sin_port = htons (tsock -> sin_port);
-#endif
     tsock -> sin_addr.s_addr = (u_long) INADDR_ANY;
     if ((sd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
 	return NOTOK;
@@ -98,15 +95,9 @@ char   *ttyptr;
     if(bind(sd, tsock, sizeof(*tsock)) < 0)
 	return NOTOK;
 
-#ifdef vax
-    tsock -> sin_port = ntohs (tsock -> sin_port);
-#endif
 
     esock -> sin_family = AF_INET;
     esock -> sin_port = tty_port;
-#ifdef vax
-    esock -> sin_port = htons (esock -> sin_port);
-#endif
     esock -> sin_addr.s_addr = (u_long) iaddr;
 
     astat = signal (SIGALRM, alrmser);
@@ -129,9 +120,6 @@ char   *ttyptr;
 		return NOTOK;
 	}
 
-#ifdef vax
-    esock -> sin_port = ntohs (esock -> sin_port);
-#endif
     signal (SIGALRM, astat);
     alarm (timer);
 
